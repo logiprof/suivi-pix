@@ -21,7 +21,7 @@ import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.2.1"
+VERSION = "1.3.0"
 # Dans l'app construite (PyInstaller), les fichiers sont dans sys._MEIPASS
 HERE = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
 if sys.platform == "darwin":
@@ -61,7 +61,10 @@ _server = None
 # HTTP vers Pix (urllib, avec repli sur curl si les certificats posent souci)
 # --------------------------------------------------------------------------
 class PixError(Exception):
-    pass
+    """kind = "credentials" (identifiant / mot de passe a corriger par l'eleve) ou "other" (technique)."""
+    def __init__(self, msg, kind="other"):
+        super().__init__(msg)
+        self.kind = kind
 
 
 def _http_urllib(method, url, headers, body):
@@ -134,14 +137,14 @@ def _error_message(status, text):
         "USER_IS_BLOCKED": "Compte bloqué par Pix après trop d'essais.",
     }
     if code in known:
-        return known[code]
-    if status == 401:
-        return "Identifiant ou mot de passe incorrect."
+        return known[code], "other"
+    if status in (400, 401):
+        return "Identifiant ou mot de passe incorrect.", "credentials"
     if status == 429:
-        return "Trop de requêtes : Pix demande de patienter."
+        return "Trop de requêtes : Pix demande de patienter.", "other"
     if detail:
-        return "Pix a répondu : %s" % detail
-    return "Erreur Pix (code HTTP %s)." % status
+        return "Pix a répondu : %s" % detail, "other"
+    return "Erreur Pix (code HTTP %s)." % status, "other"
 
 
 def pix_check(domain, login, password):
@@ -159,7 +162,7 @@ def pix_check(domain, login, password):
         "Accept": "application/json",
     }, body)
     if status != 200:
-        raise PixError(_error_message(status, text))
+        raise PixError(*_error_message(status, text))
     tok = json.loads(text)
     access, user_id, refresh = tok.get("access_token"), tok.get("user_id"), tok.get("refresh_token")
     if not access or not user_id:
@@ -171,7 +174,7 @@ def pix_check(domain, login, password):
             "Accept": "application/vnd.api+json",
         })
         if status != 200:
-            raise PixError(_error_message(status, text))
+            raise PixError(*_error_message(status, text))
         return parse_profile(json.loads(text))
     finally:
         if refresh:  # on referme la session ouverte, en arriere-plan (ne retarde pas la reponse)
@@ -218,13 +221,13 @@ def _mock_profile(login, password):
     import random
     time.sleep(0.4)
     if password == "faux":
-        raise PixError("Identifiant ou mot de passe incorrect.")
+        raise PixError("Identifiant ou mot de passe incorrect.", "credentials")
     rnd = random.Random(login)
     idx = ["1.1", "1.2", "1.3", "2.1", "2.2", "2.3", "2.4", "3.1", "3.2", "3.3", "3.4",
            "4.1", "4.2", "4.3", "5.1", "5.2"]
     cards = []
     for i in idx:
-        lvl = rnd.choice([0, 0, 1, 2, 2, 3, 4])
+        lvl = rnd.choice([0, 1, 2, 3, 3, 4, 4, 5, 5, 6, 7])
         st = "NOT_STARTED" if lvl == 0 and rnd.random() < .6 else "STARTED"
         cards.append({"index": i, "name": None, "level": lvl, "earnedPix": lvl * 8 + rnd.randint(0, 7),
                       "status": st, "percentNext": rnd.randint(0, 99), "remainingPix": rnd.randint(1, 8), "area": ""})
@@ -491,7 +494,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"ok": True, **res})
             except PixError as e:
                 log("verification refusee (%.1f s) : %s" % (time.time() - t0, e))
-                return self._send(200, {"ok": False, "error": str(e)})
+                return self._send(200, {"ok": False, "error": str(e), "kind": e.kind})
             except Exception as e:  # erreur imprevue
                 import traceback
                 log("ERREUR inattendue :\n" + traceback.format_exc())

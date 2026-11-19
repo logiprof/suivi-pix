@@ -15,18 +15,20 @@ SUIVI PIX — mode d'emploi
      seule les colonnes Nom / Identifiant / Mot de passe ; vérifiez l'aperçu et
      corrigez le choix des colonnes si besoin (il est retenu pour la prochaine fois).
      Si un élève a répondu deux fois au formulaire, sa dernière réponse est gardée.
-   - « Vérifier les niveaux… » : les 3 compétences suivies sont cochées d'office
-     (3.1 Développer des documents textuels, 4.3 Protéger la santé, le bien-être
-     et l'environnement, 5.1 Résoudre des problèmes techniques). Vous pouvez en
-     changer, ajouter un niveau visé, puis lancer.
-   - Tableau : niveau et Pix de chaque élève par compétence, plus le TOTAL des
-     niveaux des compétences choisies. Une compétence pas commencée compte 0.
-     Cliquez sur un titre de colonne pour trier. « changer » permet d'afficher
-     d'autres compétences sans relancer la vérification.
-   - Les comptes qui n'ont pas pu se connecter sont listés à part, sous le
-     tableau (« Copier la liste » pour les coller dans un message).
+   - « Vérifier les niveaux… » : les 3 compétences contrôlées sont cochées d'office
+     (3.1, 4.3, 5.1) avec les règles des consignes, modifiables en bas de la fenêtre :
+       · total des 3 niveaux : 11 au minimum
+       · niveau 2 au minimum dans chaque compétence, sinon −1 point par compétence
+       · niveau 6 au maximum (au-delà, la compétence compte 6 dans le total)
+   - Tableau : niveau de chaque élève par compétence (vert = 2 à 6, rouge = sous 2,
+     orange = au-dessus de 6), total, pénalité et bilan (« Conforme » ou ce qui
+     manque). Une compétence pas commencée compte 0. Cliquez sur un titre de
+     colonne pour trier.
+   - Sous le tableau : les élèves INÉVALUABLES (identifiant ou mot de passe
+     incorrect ou absent → travail non remis) et ceux À REVÉRIFIER (problème
+     technique, à relancer).
    - « Exporter en Excel » : un classeur avec 3 onglets (Résultats,
-     Connexions impossibles, Infos).
+     Inévaluables, Infos avec les règles et le bilan de la classe).
    - « Quitter » pour arrêter l'app (elle s'arrête aussi seule quelques minutes
      après la fermeture de l'onglet).
 
@@ -38,6 +40,8 @@ SUIVI PIX — mode d'emploi
      supprimez-le quand vous n'en avez plus besoin.
 
 4. SI ÇA NE MARCHE PAS
+   - Un journal de diagnostic (sans identifiants) est écrit dans
+     ~/Library/Logs/Suivi Pix.log : utile à transmettre en cas de problème.
    - « Identifiant ou mot de passe incorrect » : vérifiez la ligne du CSV.
      Attention, trop d'essais ratés bloquent temporairement le compte de l'élève.
    - Comptes créés sur pix.org plutôt que pix.fr : changez la plateforme en haut

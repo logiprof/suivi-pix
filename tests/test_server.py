@@ -30,8 +30,11 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(p["scorecards"][0]["area"], "Information et données")
 
     def test_error_messages(self):
-        self.assertIn("incorrect", server._error_message(401, '{"errors":[{"title":"Unauthorized"}]}'))
-        self.assertIn("changer son mot de passe", server._error_message(401, '{"errors":[{"code":"SHOULD_CHANGE_PASSWORD"}]}'))
+        self.assertEqual(server._error_message(401, '{"errors":[{"title":"Unauthorized"}]}'),
+                         ("Identifiant ou mot de passe incorrect.", "credentials"))
+        msg, kind = server._error_message(401, '{"errors":[{"code":"SHOULD_CHANGE_PASSWORD"}]}')
+        self.assertIn("changer son mot de passe", msg)
+        self.assertEqual(kind, "other")
 
 
 class XlsxTests(unittest.TestCase):
@@ -88,6 +91,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(len(res["scorecards"]), 16)
         code, res = self.post("/api/check", {"domain": "app.pix.fr", "login": "lea", "password": "faux"})
         self.assertFalse(res["ok"])
+        self.assertEqual(res["kind"], "credentials")
 
     def test_unknown_domain(self):
         _, res = self.post("/api/check", {"domain": "evil.example", "login": "a", "password": "b"})
