@@ -14,7 +14,9 @@ SUIVI PIX — mode d'emploi
    - Déposez l'export Excel de Microsoft Forms (.xlsx) ou un CSV. L'app repère
      seule les colonnes Nom / Identifiant / Mot de passe ; vérifiez l'aperçu et
      corrigez le choix des colonnes si besoin (il est retenu pour la prochaine fois).
-     Si un élève a répondu deux fois au formulaire, sa dernière réponse est gardée.
+     Les colonnes « Classe » et « Date d'envoi » (Heure de fin dans Forms) sont
+     reprises aussi (facultatives). Si un élève a répondu deux fois au formulaire,
+     sa réponse la plus récente est gardée.
    - « Vérifier les niveaux… » : les 3 compétences contrôlées sont cochées d'office
      (3.1, 4.3, 5.1) avec les règles des consignes, modifiables en bas de la fenêtre :
        · total des 3 niveaux : 11 au minimum
@@ -24,13 +26,19 @@ SUIVI PIX — mode d'emploi
      orange = au-dessus de 6), total, pénalité et bilan (« Conforme » ou ce qui
      manque). Une compétence pas commencée compte 0. Cliquez sur un titre de
      colonne pour trier.
+   - Classe et date d'envoi sont affichées pour chaque élève (tri en cliquant sur
+     le titre). « Bilan par classe » : conformes, pénalités, points de pénalité,
+     inévaluables et total moyen de chaque classe ; cliquer sur une classe (ou
+     utiliser le menu « Classe ») n'affiche qu'elle, exports compris.
    - Sous le tableau : les élèves INÉVALUABLES (identifiant ou mot de passe
      incorrect ou absent → travail non remis) et ceux À REVÉRIFIER (problème
      technique, à relancer).
    - « Exporter les listes » (sous le tableau) : chaque liste en Excel ou à
      copier : tous les résultats, conformes, total insuffisant, pénalités,
      niveau 6 dépassé, inévaluables, à revérifier.
-     « Tout exporter (Excel) » : un seul classeur, un onglet par liste + Infos.
+     « Tout exporter (Excel) » : un seul classeur, un onglet par liste, un onglet
+     « Par classe » et l'onglet Infos. Toutes les listes ont les colonnes Classe
+     et Date d'envoi.
    - « Quitter » pour arrêter l'app (elle s'arrête aussi seule quelques minutes
      après la fermeture de l'onglet).
 

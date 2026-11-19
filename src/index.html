@@ -117,6 +117,8 @@
         <label>Prénom (facultatif)<select id="mapFirst"></select></label>
         <label>Identifiant Pix (e-mail ou identifiant)<select id="mapLogin"></select></label>
         <label>Mot de passe Pix<select id="mapPassword"></select></label>
+        <label>Classe (facultatif)<select id="mapClass"></select></label>
+        <label>Date d'envoi (facultatif)<select id="mapDate"></select></label>
       </div>
       <div id="preview" class="preview"></div>
     </div>
@@ -133,6 +135,7 @@
       <button id="stop" hidden>Arrêter</button>
       <div class="progress"><div id="bar"></div></div>
       <span id="progressText" class="muted" style="font-size:13px"></span>
+      <label id="classFilterBox" class="muted" style="font-size:13px" hidden>Classe <select id="classFilter"></select></label>
       <button id="export" disabled>Tout exporter (Excel)</button>
     </div>
     <p id="lastRun" class="hint" style="margin:10px 0 0"></p>
@@ -206,7 +209,8 @@ let students = [];           // {name, login, password}
 let invalid = [];            // lignes sans identifiant ou mot de passe
 let results = null;          // {date, domain, rows:[...], failures:[...]}
 let running = false, stopRequested = false;
-let sortKey = "name", sortDir = 1;
+let sortKey = "classe", sortDir = 1;
+let classFilter = "";   // "" = toutes les classes
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -351,11 +355,16 @@ function guessMapping(headers) {
     return -1;
   };
   const password = find(/mot de passe|password|mdp/);
+  const classe = find(/classe|\bclass\b|groupe|division/, /date|heure/);
+  let date = find(/date.*envoi|envoi|soumission|submitted|submission/);
+  if (date < 0) date = find(/^heure de fin$|^completion time$|^date de fin$/);
+  if (date < 0) date = find(/^heure de debut$|^start time$/);
+  if (date < 0) date = find(/\bdate\b|horodat|timestamp/, /naissance|birth/);
   const login = find(/identifiant|login|nom d.?utilisateur|username|adresse.*pix|mail.*pix|pix.*(mail|adresse|compte)|compte pix/);
   const loginFinal = login >= 0 ? login : find(/e-?mail|courriel|adresse/);
   const first = find(/prenom|first ?name/, /\bnom\b.*prenom|prenom.*\bnom\b/);
   const name = find(/nom|eleve|name|apprenti|etudiant|participant/, /utilisateur|user/);
-  return { name, first, login: loginFinal, password };
+  return { name, first, login: loginFinal, password, classe, date };
 }
 function setSheet(rows, fileName) {
   const hdr = rows[0];
@@ -370,42 +379,73 @@ function setSheet(rows, fileName) {
   // mapping : celui enregistré la dernière fois s'il correspond aux colonnes, sinon détection
   const saved = settings.mapping || {};
   const byName = (k) => saved[k] ? sheet.headers.indexOf(saved[k]) : -1;
-  let m = hasHeader ? g : { name: 0, first: -1, login: rows[0].length >= 3 ? 1 : 0, password: rows[0].length >= 3 ? 2 : 1 };
-  if (byName("login") >= 0 && byName("password") >= 0) m = { name: byName("name"), first: byName("first"), login: byName("login"), password: byName("password") };
-  for (const [k, id] of [["name", "mapName"], ["first", "mapFirst"], ["login", "mapLogin"], ["password", "mapPassword"]]) {
+  let m = hasHeader ? g : { name: 0, first: -1, login: rows[0].length >= 3 ? 1 : 0, password: rows[0].length >= 3 ? 2 : 1, classe: -1, date: -1 };
+  if (byName("login") >= 0 && byName("password") >= 0) {
+    m = { name: byName("name"), first: byName("first"), login: byName("login"), password: byName("password"),
+          classe: saved.classe !== undefined ? byName("classe") : g.classe, date: saved.date !== undefined ? byName("date") : g.date };
+  }
+  for (const [k, id] of [["name", "mapName"], ["first", "mapFirst"], ["login", "mapLogin"], ["password", "mapPassword"], ["classe", "mapClass"], ["date", "mapDate"]]) {
     const opt = `<option value="-1">— aucune —</option>` + sheet.headers.map((x, i) => `<option value="${i}">${esc(x)}</option>`).join("");
     $(id).innerHTML = opt; $(id).value = String(m[k] ?? -1);
   }
   $("mappingBox").hidden = false;
   buildStudents();
 }
-["mapName", "mapFirst", "mapLogin", "mapPassword"].forEach(id => $(id).onchange = () => {
-  settings.mapping = Object.fromEntries([["name", "mapName"], ["first", "mapFirst"], ["login", "mapLogin"], ["password", "mapPassword"]]
+["mapName", "mapFirst", "mapLogin", "mapPassword", "mapClass", "mapDate"].forEach(id => $(id).onchange = () => {
+  settings.mapping = Object.fromEntries([["name", "mapName"], ["first", "mapFirst"], ["login", "mapLogin"], ["password", "mapPassword"], ["classe", "mapClass"], ["date", "mapDate"]]
     .map(([k, i]) => [k, Number($(i).value) >= 0 ? sheet.headers[Number($(i).value)] : ""]));
   save(); buildStudents();
 });
+/* Dates : nombre de série Excel (export Forms) ou texte (CSV) → affichage + clé de tri */
+const pad2 = (n) => String(n).padStart(2, "0");
+function parseDate(v) {
+  v = String(v ?? "").trim();
+  if (!v) return { text: "", sort: "" };
+  let d = null;
+  if (/^\d+(\.\d+)?$/.test(v) && +v > 20000 && +v < 80000) {
+    d = new Date(Math.round((+v - 25569) * 86400000));            // jours depuis le 30.12.1899
+  } else {
+    let m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+    if (m) d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)));
+    else if ((m = v.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})(?:[ ,]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?/i))) {
+      let a = +m[1], b = +m[2], y = +m[3]; if (y < 100) y += 2000;
+      let day = a, mon = b;
+      if (v.includes("/") && (m[7] || b > 12)) { day = b; mon = a; }   // format américain m/d/y (Forms en anglais)
+      let hh = +(m[4] || 0); if (m[7]) { if (/pm/i.test(m[7]) && hh < 12) hh += 12; if (/am/i.test(m[7]) && hh === 12) hh = 0; }
+      d = new Date(Date.UTC(y, mon - 1, day, hh, +(m[5] || 0), +(m[6] || 0)));
+    }
+  }
+  if (!d || isNaN(d)) return { text: v, sort: v };
+  const text = `${pad2(d.getUTCDate())}.${pad2(d.getUTCMonth() + 1)}.${d.getUTCFullYear()} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+  return { text, sort: d.toISOString() };
+}
+
 function buildStudents() {
   const mi = (id) => Number($(id).value);
-  const [cN, cF, cL, cP] = [mi("mapName"), mi("mapFirst"), mi("mapLogin"), mi("mapPassword")];
+  const [cN, cF, cL, cP, cC, cD] = [mi("mapName"), mi("mapFirst"), mi("mapLogin"), mi("mapPassword"), mi("mapClass"), mi("mapDate")];
   const get = (r, c) => c >= 0 ? String(r[c] ?? "").trim() : "";
   const byLogin = new Map(); invalid = []; let dup = 0;
   for (const r of sheet.rows) {
     const login = get(r, cL), password = get(r, cP);
     const name = [get(r, cN), get(r, cF)].filter(Boolean).join(" ") || login || "(sans nom)";
-    if (!login || !password) { invalid.push({ name, login, kind: "credentials", error: !login ? "Identifiant manquant dans le fichier." : "Mot de passe manquant dans le fichier." }); continue; }
+    const classe = get(r, cC), dt = parseDate(get(r, cD));
+    const extra = { classe, date: dt.text, dateSort: dt.sort };
+    if (!login || !password) { invalid.push({ name, login, ...extra, kind: "credentials", error: !login ? "Identifiant manquant dans le fichier." : "Mot de passe manquant dans le fichier." }); continue; }
     const key = login.toLowerCase();
-    if (byLogin.has(key)) dup++;
-    byLogin.set(key, { name, login, password });   // la dernière réponse du formulaire l'emporte
+    const prev = byLogin.get(key);
+    if (prev) dup++;
+    // en cas de doublon, la réponse la plus récente l'emporte (ou la dernière ligne si pas de date)
+    if (!prev || !prev.dateSort || !extra.dateSort || extra.dateSort >= prev.dateSort) byLogin.set(key, { name, login, password, ...extra });
   }
   students = [...byLogin.values()];
   // aperçu
   const sample = sheet.rows.slice(0, 3);
   const mask = (v) => v ? "•".repeat(Math.min(8, v.length)) : "";
-  $("preview").innerHTML = sample.length ? `<div class="table-wrap" style="max-height:none"><table><thead><tr><th>Nom</th><th>Identifiant</th><th>Mot de passe</th></tr></thead><tbody>` +
-    sample.map(r => `<tr><td>${esc([get(r, cN), get(r, cF)].filter(Boolean).join(" "))}</td><td>${esc(get(r, cL))}</td><td>${mask(get(r, cP))}</td></tr>`).join("") +
+  $("preview").innerHTML = sample.length ? `<div class="table-wrap" style="max-height:none"><table><thead><tr><th>Nom</th><th>Classe</th><th>Date d'envoi</th><th>Identifiant</th><th>Mot de passe</th></tr></thead><tbody>` +
+    sample.map(r => `<tr><td>${esc([get(r, cN), get(r, cF)].filter(Boolean).join(" "))}</td><td>${esc(get(r, cC))}</td><td>${esc(parseDate(get(r, cD)).text)}</td><td>${esc(get(r, cL))}</td><td>${mask(get(r, cP))}</td></tr>`).join("") +
     `</tbody></table></div><p class="hint" style="margin:6px 0 0">Aperçu des 3 premières lignes : vérifiez que les bonnes colonnes sont choisies.</p>` : "";
   let info = `${esc(sheet.fileName)} · ${students.length} élève${students.length > 1 ? "s" : ""}`;
-  if (dup) info += ` · ${dup} doublon${dup > 1 ? "s" : ""} (dernière réponse gardée)`;
+  if (dup) info += ` · ${dup} doublon${dup > 1 ? "s" : ""} (réponse la plus récente gardée)`;
   if (invalid.length) info += ` · ${invalid.length} ligne${invalid.length > 1 ? "s" : ""} incomplète${invalid.length > 1 ? "s" : ""}`;
   $("studentsInfo").className = "pill"; $("studentsInfo").innerHTML = info;
   $("run").disabled = running || !(students.length || invalid.length);
@@ -454,12 +494,12 @@ async function runCheck() {
       break;
     }
     if (res.ok) {
-      const row = { name: s.name, login: s.login, pixScore: res.pixScore, levels: {} };
+      const row = { name: s.name, login: s.login, classe: s.classe, date: s.date, dateSort: s.dateSort, pixScore: res.pixScore, levels: {} };
       for (const c of res.scorecards) row.levels[c.index] = { level: c.level, earnedPix: c.earnedPix, status: c.status, remainingPix: c.remainingPix };
       results.rows.push(row);
       if (learnComps(res.scorecards)) save();
     } else {
-      results.failures.push({ name: s.name, login: s.login, error: res.error || "Erreur inconnue.", kind: res.kind || "other" });
+      results.failures.push({ name: s.name, login: s.login, classe: s.classe, date: s.date, dateSort: s.dateSort, error: res.error || "Erreur inconnue.", kind: res.kind || "other" });
     }
     renderResults();
     if (i < list.length - 1) await sleep(700);  // on reste raisonnable avec les serveurs Pix
@@ -498,16 +538,25 @@ function cellClass(r, k) {
   const R = settings.rules, l = lvOf(r, k);
   return l < R.min ? "bad" : (R.max && l > R.max) ? "mid" : "ok";
 }
+const clsOf = (x) => x.classe || "(sans classe)";
+const inClass = (x) => !classFilter || clsOf(x) === classFilter;
+const classKey = (c) => norm(c).replace(/\d+/g, (n) => n.padStart(6, "0"));   // 9VG2 < 9VG10
+function classesOf() {
+  const set = new Set([...results.rows, ...results.failures].map(clsOf));
+  return [...set].sort((a, b) => classKey(a) > classKey(b) ? 1 : -1);
+}
 function sortedRows() {
   const val = (r) => {
     if (sortKey === "name") return norm(r.name);
+    if (sortKey === "classe") return classKey(clsOf(r)) + "|" + norm(r.name);
+    if (sortKey === "date") return r.dateSort || "";
     const e = evalRow(r);
     if (sortKey === "total") return e.total * 10000 + settings.selected.reduce((a, k) => a + pixOf(r, k), 0);
     if (sortKey === "penalty") return e.penalty;
     if (sortKey === "bilan") return (e.ok ? 0 : 1) * 1000 + e.issues.length;
     return lvOf(r, sortKey) * 10000 + pixOf(r, sortKey);
   };
-  return [...results.rows].sort((a, b) => (val(a) > val(b) ? 1 : val(a) < val(b) ? -1 : 0) * sortDir || (norm(a.name) > norm(b.name) ? 1 : -1));
+  return results.rows.filter(inClass).sort((a, b) => (val(a) > val(b) ? 1 : val(a) < val(b) ? -1 : 0) * sortDir || (norm(a.name) > norm(b.name) ? 1 : -1));
 }
 function rulesText() {
   const R = settings.rules;
@@ -524,25 +573,40 @@ function renderResults() {
   $("lastRun").innerHTML = `Vérification du ${d.toLocaleDateString("fr-CH")} à ${d.toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" })} sur ${esc(results.domain)} · ` +
     `Compétences <b>${settings.selected.map(esc).join(", ") || "aucune"}</b> · Règles : ${esc(rulesText())} <button class="link" id="changeComps">modifier</button>`;
   $("changeComps").onclick = () => openDialog("view");
+  if (classFilter) $("lastRun").insertAdjacentHTML("beforeend", ` · <b>Classe ${esc(classFilter)}</b> <button class="link" id="allClasses">toutes les classes</button>`);
+  if (classFilter) $("allClasses").onclick = () => { classFilter = ""; renderResults(); };
 
   const cols = settings.selected;
   const arrow = (k) => sortKey === k ? (sortDir > 0 ? " ▲" : " ▼") : "";
-  const evals = new Map(results.rows.map(r => [r, evalRow(r)]));
-  const fails = results.failures, nCred = fails.filter(x => kindOf(x) === "credentials").length, nOther = fails.length - nCred;
+  // filtre classe
+  const classes = classesOf();
+  const hasClass = [...results.rows, ...results.failures].some(x => x.classe);
+  $("classFilterBox").hidden = !hasClass;
+  if (hasClass) {
+    if (classFilter && !classes.includes(classFilter)) classFilter = "";
+    $("classFilter").innerHTML = `<option value="">Toutes</option>` + classes.map(c => `<option value="${esc(c)}"${c === classFilter ? " selected" : ""}>${esc(c)}</option>`).join("");
+  } else classFilter = "";
+  const hasDate = [...results.rows, ...results.failures].some(x => x.date);
+  const shown = sortedRows();
+  const evals = new Map(shown.map(r => [r, evalRow(r)]));
+  const fails = results.failures.filter(inClass), nCred = fails.filter(x => kindOf(x) === "credentials").length, nOther = fails.length - nCred;
   let h = "";
-  if (results.rows.length) {
+  if (shown.length) {
     const E = [...evals.values()];
     const chip = (cls, txt, n) => n ? `<span class="chip ${cls}">${txt} : <b>${n}</b></span>` : "";
     h += `<div class="chips">${chip("ok", "✓ Conformes", E.filter(e => e.ok).length)}${chip("mid", `Total < ${R.total}`, E.filter(e => !e.totalOk).length)}` +
       `${chip("bad", `Pénalité (niveau ${R.min} non atteint)`, E.filter(e => e.penalty).length)}${chip("mid", `Niveau ${R.max} dépassé`, E.filter(e => e.above.length).length)}` +
       `${chip("bad", "Inévaluables", nCred)}${chip("", "À revérifier", nOther)}</div>`;
-    h += `<div class="table-wrap"><table><thead><tr><th class="name" data-sort="name">Élève${arrow("name")}</th>`;
+    if (hasClass && !classFilter && classes.length > 1) h += classSummaryHtml();
+    h += `<div class="table-wrap"><table><thead><tr><th class="name" data-sort="name">Élève${arrow("name")}</th>` +
+      (hasClass ? `<th data-sort="classe">Classe${arrow("classe")}</th>` : "") + (hasDate ? `<th data-sort="date">Date d'envoi${arrow("date")}</th>` : "");
     for (const k of cols) h += `<th data-sort="${esc(k)}" title="${esc(compName(k))}">${esc(k)} ${esc(shortName(compName(k)))}${arrow(k)}</th>`;
     h += `<th class="total" data-sort="total">Total<br><span style="font-weight:400">objectif ${R.total}</span>${arrow("total")}</th>` +
          `<th data-sort="penalty">Pénalité${arrow("penalty")}</th><th data-sort="bilan" style="text-align:left">Bilan${arrow("bilan")}</th></tr></thead><tbody>`;
-    for (const r of sortedRows()) {
+    for (const r of shown) {
       const e = evals.get(r);
-      h += `<tr><td class="name" title="${esc(r.login)}">${esc(r.name)}</td>`;
+      h += `<tr><td class="name" title="${esc(r.login)}">${esc(r.name)}</td>` +
+        (hasClass ? `<td>${esc(r.classe)}</td>` : "") + (hasDate ? `<td class="muted" style="font-size:13px">${esc(r.date)}</td>` : "");
       for (const k of cols) {
         const l = (r.levels || {})[k];
         const ns = !l || l.status === "NOT_STARTED";
@@ -553,10 +617,10 @@ function renderResults() {
       h += `<td class="lvl ${e.penalty ? "pen" : "low"}">${e.penalty ? fmtPts(e.penalty) : "–"}</td>`;
       h += `<td class="bilan ${e.ok ? "ok" : "ko"}">${e.ok ? "✓ Conforme" : e.issues.map(esc).join("<br>")}</td></tr>`;
     }
-    const n = results.rows.length;
+    const n = shown.length;
     if (n > 1) {
-      h += `<tr class="summary"><td class="name">Moyenne (${n} élèves)</td>`;
-      for (const k of cols) h += `<td class="lvl">${(results.rows.reduce((a, r) => a + lvOf(r, k), 0) / n).toFixed(1)}</td>`;
+      h += `<tr class="summary"><td class="name">Moyenne (${n} élèves)</td>` + (hasClass ? "<td></td>" : "") + (hasDate ? "<td></td>" : "");
+      for (const k of cols) h += `<td class="lvl">${(shown.reduce((a, r) => a + lvOf(r, k), 0) / n).toFixed(1)}</td>`;
       h += `<td class="lvl total">${(E.reduce((a, e) => a + e.total, 0) / n).toFixed(1)}</td><td></td><td></td></tr>`;
     }
     h += `</tbody></table></div>`;
@@ -569,25 +633,52 @@ function renderResults() {
 
   $("errSection").hidden = !fails.length;
   $("errCount").textContent = fails.length;
-  const ordered = [...fails].sort((a, b) => (kindOf(a) === kindOf(b) ? (norm(a.name) > norm(b.name) ? 1 : -1) : kindOf(a) === "credentials" ? -1 : 1));
-  $("errors").innerHTML = fails.length ? `<div class="table-wrap"><table><thead><tr><th class="name">Élève</th><th style="text-align:left">Identifiant</th><th style="text-align:left">Statut</th><th style="text-align:left">Détail</th></tr></thead><tbody>` +
+  const ordered = [...fails].sort((a, b) => (kindOf(a) === kindOf(b) ? (classKey(a.classe || "") + norm(a.name) > classKey(b.classe || "") + norm(b.name) ? 1 : -1) : kindOf(a) === "credentials" ? -1 : 1));
+  $("errors").innerHTML = fails.length ? `<div class="table-wrap"><table><thead><tr><th class="name">Élève</th>` + (hasClass ? `<th>Classe</th>` : "") + (hasDate ? `<th>Date d'envoi</th>` : "") +
+    `<th style="text-align:left">Identifiant</th><th style="text-align:left">Statut</th><th style="text-align:left">Détail</th></tr></thead><tbody>` +
     ordered.map(x => { const c = kindOf(x) === "credentials";
-      return `<tr><td class="name">${esc(x.name)}</td><td class="left">${esc(x.login) || '<span class="muted">(vide)</span>'}</td>` +
+      return `<tr><td class="name">${esc(x.name)}</td>` + (hasClass ? `<td>${esc(x.classe)}</td>` : "") + (hasDate ? `<td class="muted" style="font-size:13px">${esc(x.date)}</td>` : "") + `<td class="left">${esc(x.login) || '<span class="muted">(vide)</span>'}</td>` +
         `<td class="${c ? "status-cred" : "status-other"}">${c ? "Inévaluable – non remis" : "À revérifier"}</td><td class="left muted" style="white-space:normal">${esc(x.error)}</td></tr>`; }).join("") +
     `</tbody></table></div>` : "";
   $("export").disabled = running || !has;
   renderExportPanel();
 }
+$("classFilter").onchange = (e) => { classFilter = e.target.value; renderResults(); };
+
+/* Bilan par classe */
+function classStats() {
+  return classesOf().map(c => {
+    const rows = results.rows.filter(r => clsOf(r) === c), E = rows.map(evalRow);
+    const f = results.failures.filter(x => clsOf(x) === c);
+    const nCred = f.filter(x => kindOf(x) === "credentials").length;
+    return { classe: c, n: rows.length, ok: E.filter(e => e.ok).length, low: E.filter(e => !e.totalOk).length,
+      pen: E.filter(e => e.penalty).length, penPts: E.reduce((a, e) => a + e.penalty, 0), above: E.filter(e => e.above.length).length,
+      cred: nCred, other: f.length - nCred, avg: rows.length ? Math.round(E.reduce((a, e) => a + e.total, 0) / rows.length * 10) / 10 : null };
+  });
+}
+function classSummaryHtml() {
+  const R = settings.rules;
+  return `<h3 style="margin:16px 0 0;font-size:15px">Bilan par classe</h3><div class="table-wrap" style="max-height:none;margin-top:8px"><table><thead><tr>
+    <th class="name">Classe</th><th>Vérifiés</th><th>Conformes</th><th>Total &lt; ${R.total}</th><th>Avec pénalité</th><th>Points de pénalité</th><th>Niveau ${R.max} dépassé</th><th>Inévaluables</th><th>À revérifier</th><th>Total moyen</th></tr></thead><tbody>` +
+    classStats().map(c => `<tr><td class="name"><button class="link" data-class="${esc(c.classe)}">${esc(c.classe)}</button></td><td>${c.n}</td><td class="lvl ${c.ok ? "ok" : ""}">${c.ok}</td><td>${c.low}</td>` +
+      `<td>${c.pen}</td><td class="${c.penPts ? "pen" : ""}">${c.penPts ? fmtPts(c.penPts) : "0"}</td><td>${c.above}</td><td class="${c.cred ? "pen" : ""}">${c.cred}</td><td>${c.other}</td><td class="lvl">${c.avg ?? "–"}</td></tr>`).join("") +
+    `</tbody></table></div><p class="hint" style="margin:6px 0 0">Cliquez sur une classe pour n'afficher qu'elle.</p>`;
+}
+$("results").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-class]");
+  if (b) { classFilter = b.dataset.class; renderResults(); }
+});
+
 function shortName(n) { return n.length > 22 ? n.slice(0, 20).trim() + "…" : n; }
 $("results").addEventListener("click", (e) => {
   const th = e.target.closest("th[data-sort]");
   if (!th) return;
   const k = th.dataset.sort;
-  if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = k === "name" || k === "bilan" ? 1 : -1; }
+  if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = ["name", "bilan", "classe"].includes(k) ? 1 : -1; }
   renderResults();
 });
 $("copyErr").onclick = async () => {
-  const txt = ["Élève\tIdentifiant\tStatut\tDétail", ...results.failures.map(x => `${x.name}\t${x.login}\t${kindOf(x) === "credentials" ? "Inévaluable – non remis" : "À revérifier"}\t${x.error}`)].join("\n");
+  const txt = listAsText(allLists().find(l => l.key === "inevaluables")) + "\n" + listAsText(allLists().find(l => l.key === "a-reverifier")).split("\n").slice(1).join("\n");
   try { await navigator.clipboard.writeText(txt); $("copyErr").textContent = "Copié ✓"; }
   catch { $("copyErr").textContent = "Copie impossible"; }
   setTimeout(() => $("copyErr").textContent = "Copier la liste", 1800);
@@ -597,7 +688,7 @@ $("copyErr").onclick = async () => {
 const cred = (x) => kindOf(x) === "credentials";
 function allLists() {
   const R = settings.rules, rows = sortedRows(), ev = new Map(rows.map(r => [r, evalRow(r)]));
-  const f = [...results.failures].sort((a, b) => norm(a.name) > norm(b.name) ? 1 : -1);
+  const f = results.failures.filter(inClass).sort((a, b) => classKey(a.classe || "") + norm(a.name) > classKey(b.classe || "") + norm(b.name) ? 1 : -1);
   return [
     { key: "resultats", title: "Tous les résultats", sheet: "Résultats", type: "students", rows },
     { key: "conformes", title: "Conformes", sheet: "Conformes", type: "students", rows: rows.filter(r => ev.get(r).ok) },
@@ -611,46 +702,48 @@ function allLists() {
 const H = (v) => ({ v, s: "header" });
 function studentHeader() {
   const R = settings.rules;
-  return ["Élève", "Identifiant", ...settings.selected.map(k => `${k} ${compName(k)}`), `Total (objectif ${R.total})`, "Objectif total atteint",
+  return ["Élève", "Classe", "Date d'envoi", "Identifiant", ...settings.selected.map(k => `${k} ${compName(k)}`), `Total (objectif ${R.total})`, "Objectif total atteint",
     `Niveau ${R.min} atteint partout`, `Niveau ${R.max} respecté`, "Pénalité (points)", "Bilan"];
 }
 function studentCells(r) {
   const e = evalRow(r), cols = settings.selected;
-  return [r.name, r.login, ...cols.map(k => ({ v: lvOf(r, k), s: cellClass(r, k) === "bad" ? "err" : cellClass(r, k) === "mid" ? "mid" : "ok" })),
+  return [r.name, r.classe || "", r.date || "", r.login, ...cols.map(k => ({ v: lvOf(r, k), s: cellClass(r, k) === "bad" ? "err" : cellClass(r, k) === "mid" ? "mid" : "ok" })),
     { v: e.total, s: e.totalOk ? "ok" : "mid" }, e.totalOk ? "Oui" : "Non",
     e.below.length ? { v: "Non (" + e.below.join(", ") + ")", s: "err" } : "Oui",
     e.above.length ? { v: "Non (" + e.above.join(", ") + ")", s: "mid" } : "Oui",
     e.penalty ? { v: -e.penalty, s: "err" } : 0, e.ok ? { v: "Conforme", s: "ok" } : e.issues.join(" · ")];
 }
-const failureHeader = () => ["Élève", "Identifiant", "Statut", "Détail"];
-const failureCells = (x) => [x.name, x.login, { v: cred(x) ? "Inévaluable – travail non remis" : "À revérifier (problème technique)", s: cred(x) ? "err" : "mid" }, x.error];
+const failureHeader = () => ["Élève", "Classe", "Date d'envoi", "Identifiant", "Statut", "Détail"];
+const failureCells = (x) => [x.name, x.classe || "", x.date || "", x.login, { v: cred(x) ? "Inévaluable – travail non remis" : "À revérifier (problème technique)", s: cred(x) ? "err" : "mid" }, x.error];
 function sheetFor(list) {
   const isS = list.type === "students";
   const header = (isS ? studentHeader() : failureHeader()).map(H);
   const body = list.rows.length ? list.rows.map(isS ? studentCells : failureCells) : [[{ v: "Aucun élève dans cette liste", s: "bold" }]];
   if (isS && list.key === "resultats" && list.rows.length > 1) {
     const n = list.rows.length, avg = (fn) => Math.round(list.rows.reduce((a, r) => a + fn(r), 0) / n * 10) / 10;
-    body.push([{ v: "Moyenne", s: "bold" }, "", ...settings.selected.map(k => ({ v: avg(r => lvOf(r, k)), s: "bold" })), { v: avg(r => evalRow(r).total), s: "bold" }]);
+    body.push([{ v: "Moyenne", s: "bold" }, "", "", "", ...settings.selected.map(k => ({ v: avg(r => lvOf(r, k)), s: "bold" })), { v: avg(r => evalRow(r).total), s: "bold" }]);
   }
-  const widths = isS ? [26, 28, ...settings.selected.map(() => 16), 14, 12, 18, 16, 12, 50] : [26, 30, 32, 50];
+  const widths = isS ? [26, 10, 17, 28, ...settings.selected.map(() => 16), 14, 12, 18, 16, 12, 50] : [26, 10, 17, 30, 32, 50];
   return { name: list.sheet, rows: [header, ...body], freeze: true, widths };
 }
 function infoSheet() {
-  const R = settings.rules, d = new Date(results.date), E = results.rows.map(evalRow);
-  return { name: "Infos", widths: [50, 26], rows: [[H("Suivi Pix"), H("")], ["Date de la vérification", d.toLocaleString("fr-CH")], ["Plateforme", results.domain], ["", ""],
+  const R = settings.rules, d = new Date(results.date);
+  return { name: "Infos", widths: [50, 26], rows: [[H("Suivi Pix"), H("")], ["Date de la vérification", d.toLocaleString("fr-CH")], ["Plateforme", results.domain],
+    ["Classe", classFilter || "toutes"], ["", ""],
     [H("Compétences contrôlées"), H("")], ...settings.selected.map(k => [`${k} ${compName(k)}`, ""]), ["", ""],
     [H("Règles"), H("")], ["Total des niveaux à atteindre", R.total], ["Niveau minimum dans chaque compétence", R.min],
     ["Pénalité si niveau minimum non atteint (points)", -R.penalty], ["Pénalité appliquée", R.penaltyMode === "each" ? "par compétence concernée" : "une seule fois"],
     ["Niveau maximum dans une compétence", R.max], ["Niveau au-dessus du maximum plafonné dans le total", R.cap ? "Oui" : "Non"],
     ["Compétence pas commencée", "compte 0"], ["", ""],
-    [H("Bilan"), H("")], ["Élèves vérifiés", results.rows.length], ...allLists().slice(1).map(l => [l.title, l.rows.length])] };
+    [H("Bilan"), H("")], ["Élèves vérifiés", sortedRows().length], ...allLists().slice(1).map(l => [l.title, l.rows.length])] };
 }
 async function downloadXlsx(sheets, suffix) {
   const r = await api("/api/xlsx/write", { sheets });
   const bin = atob(r.b64), bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   const day = new Date(results.date).toISOString().slice(0, 10);
-  downloadBlob(`suivi-pix-${day}${suffix ? "-" + suffix : ""}.xlsx`, new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  const cls = classFilter ? "-" + classFilter.replace(/[^\w-]+/g, "_") : "";
+  downloadBlob(`suivi-pix-${day}${cls}${suffix ? "-" + suffix : ""}.xlsx`, new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
 }
 function listAsText(list) {
   const isS = list.type === "students";
@@ -662,6 +755,7 @@ function renderExportPanel() {
   const show = !!(results && (results.rows.length || results.failures.length)) && !running;
   $("exportPanel").hidden = !show;
   if (!show) return;
+  $("exportPanel").querySelector("h3").textContent = "Exporter les listes" + (classFilter ? ` — classe ${classFilter}` : "");
   $("exportTable").innerHTML = `<thead><tr><th style="text-align:left">Liste</th><th>Élèves</th><th></th></tr></thead><tbody>` +
     allLists().map(l => `<tr><td>${esc(l.title)}</td><td class="num">${l.rows.length}</td><td class="act">` +
       `<button data-xlsx="${l.key}"${l.rows.length ? "" : " disabled"}>Excel</button><button data-copy="${l.key}"${l.rows.length ? "" : " disabled"}>Copier</button></td></tr>`).join("") + `</tbody>`;
@@ -676,7 +770,16 @@ $("exportTable").addEventListener("click", async (e) => {
   catch { b.textContent = "Copie impossible"; }
   setTimeout(() => b.textContent = "Copier", 1800);
 });
-$("export").onclick = () => downloadXlsx([...allLists().map(sheetFor), infoSheet()], "");
+function classSheet() {
+  const R = settings.rules;
+  const head = ["Classe", "Élèves vérifiés", "Conformes", `Total < ${R.total}`, "Avec pénalité", "Points de pénalité", `Niveau ${R.max} dépassé`, "Inévaluables", "À revérifier", "Total moyen"].map(H);
+  return { name: "Par classe", freeze: true, widths: [16, 14, 12, 14, 14, 16, 16, 13, 13, 12], rows: [head,
+    ...classStats().map(c => [c.classe, c.n, { v: c.ok, s: c.ok ? "ok" : "" }, c.low, c.pen, c.penPts ? { v: -c.penPts, s: "err" } : 0, c.above, c.cred ? { v: c.cred, s: "err" } : 0, c.other, c.avg ?? ""])] };
+}
+$("export").onclick = () => {
+  const hasClass = results.rows.concat(results.failures).some(x => x.classe);
+  downloadXlsx([...allLists().map(sheetFor), ...(hasClass && !classFilter ? [classSheet()] : []), infoSheet()], "");
+};
 
 /* ---------- Démarrage / arrêt ---------- */
 $("quit").onclick = async () => {

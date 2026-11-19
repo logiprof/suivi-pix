@@ -16,12 +16,12 @@ L'app fonctionne sur Mac Intel et Apple Silicon (macOS 11 ou plus récent) et n'
 ## Utilisation
 
 1. L'app s'ouvre dans le navigateur (adresse `127.0.0.1`, elle tourne uniquement sur le Mac).
-2. Déposer l'export Excel de Forms (ou un CSV `nom;identifiant;mot de passe`). Les colonnes sont repérées automatiquement et peuvent être corrigées.
+2. Déposer l'export Excel de Forms (ou un CSV `nom;identifiant;mot de passe`). Les colonnes sont repérées automatiquement et peuvent être corrigées ; **Classe** et **Date d'envoi** (« Heure de fin » de Forms) sont reprises si elles existent.
 3. **Vérifier les niveaux…** → les compétences **3.1**, **4.3** et **5.1** sont cochées par défaut, avec les règles d'évaluation (modifiables) :
    - total des niveaux ≥ **11** ;
    - niveau **2** minimum dans chaque compétence, sinon **−1 point** (par compétence concernée) ;
    - niveau **6** maximum dans une compétence (au-delà, la compétence compte 6 dans le total).
-4. Résultats : niveaux par compétence, total, pénalité et bilan par élève ; liste séparée des **inévaluables** (identifiants incorrects → travail non remis) et des comptes **à revérifier** (problème technique) ; **export** de chaque liste (Excel ou copie) ou de toutes les listes dans un classeur (un onglet par liste : Résultats, Conformes, Total insuffisant, Pénalités, Niveau 6 dépassé, Inévaluables, À revérifier, Infos).
+4. Résultats : niveaux par compétence, total, pénalité et bilan par élève ; liste séparée des **inévaluables** (identifiants incorrects → travail non remis) et des comptes **à revérifier** (problème technique) ; **bilan et filtre par classe**, tri par classe ou date d'envoi ; **export** de chaque liste (Excel ou copie) ou de toutes les listes dans un classeur (un onglet par liste : Résultats, Conformes, Total insuffisant, Pénalités, Niveau 6 dépassé, Inévaluables, À revérifier, Infos).
 
 Fermer l'onglet (ou cliquer sur *Quitter*) arrête l'app.
 
