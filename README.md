@@ -21,7 +21,7 @@ L'app fonctionne sur Mac Intel et Apple Silicon (macOS 11 ou plus récent) et n'
    - total des niveaux ≥ **11** ;
    - niveau **2** minimum dans chaque compétence, sinon **−1 point** (par compétence concernée) ;
    - niveau **6** maximum dans une compétence (au-delà, la compétence compte 6 dans le total).
-4. Résultats : niveaux par compétence, total, pénalité et bilan par élève ; liste séparée des **inévaluables** (identifiants incorrects → travail non remis) et des comptes **à revérifier** (problème technique) ; **export Excel** (Résultats, Inévaluables, Infos).
+4. Résultats : niveaux par compétence, total, pénalité et bilan par élève ; liste séparée des **inévaluables** (identifiants incorrects → travail non remis) et des comptes **à revérifier** (problème technique) ; **export** de chaque liste (Excel ou copie) ou de toutes les listes dans un classeur (un onglet par liste : Résultats, Conformes, Total insuffisant, Pénalités, Niveau 6 dépassé, Inévaluables, À revérifier, Infos).
 
 Fermer l'onglet (ou cliquer sur *Quitter*) arrête l'app.
 

@@ -27,8 +27,10 @@ SUIVI PIX — mode d'emploi
    - Sous le tableau : les élèves INÉVALUABLES (identifiant ou mot de passe
      incorrect ou absent → travail non remis) et ceux À REVÉRIFIER (problème
      technique, à relancer).
-   - « Exporter en Excel » : un classeur avec 3 onglets (Résultats,
-     Inévaluables, Infos avec les règles et le bilan de la classe).
+   - « Exporter les listes » (sous le tableau) : chaque liste en Excel ou à
+     copier : tous les résultats, conformes, total insuffisant, pénalités,
+     niveau 6 dépassé, inévaluables, à revérifier.
+     « Tout exporter (Excel) » : un seul classeur, un onglet par liste + Infos.
    - « Quitter » pour arrêter l'app (elle s'arrête aussi seule quelques minutes
      après la fermeture de l'onglet).
 
