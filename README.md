@@ -23,6 +23,8 @@ L'app fonctionne sur Mac Intel et Apple Silicon (macOS 11 ou plus récent) et n'
    - niveau **6** maximum dans une compétence (au-delà, la compétence compte 6 dans le total).
 4. Résultats : niveaux par compétence, total, pénalité et bilan par élève ; liste séparée des **inévaluables** (identifiants incorrects → travail non remis) et des comptes **à revérifier** (problème technique) ; **bilan et filtre par classe**, tri par classe ou date d'envoi ; **export** de chaque liste (Excel ou copie) ou de toutes les listes dans un classeur (un onglet par liste : Résultats, Conformes, Total insuffisant, Pénalités, Niveau 6 dépassé, Inévaluables, À revérifier, Infos).
 
+5. Onglet **Notation** : niveaux, total (11 points au maximum), pénalités automatiques et manuelles (retard, mauvais canal, mauvais identifiant, autre), note = points × 5 / 11 + 1 arrondie au demi-point ; ajout manuel d'élèves, revérification avec identifiants corrigés ; **fiches PDF** au style LogiExam (une page par élève, un PDF global ou un .zip) et **notes en Excel**.
+
 Fermer l'onglet (ou cliquer sur *Quitter*) arrête l'app.
 
 ## Confidentialité
@@ -36,6 +38,7 @@ Fermer l'onglet (ou cliquer sur *Quitter*) arrête l'app.
 
 - `src/server.py` : serveur local (Python, bibliothèque standard uniquement). Connexion via l'API de l'application Pix (`POST /api/token`, puis `GET /api/users/{id}/profile`), comme le fait le site [app.pix.fr](https://app.pix.fr) (code source de Pix : [1024pix/pix](https://github.com/1024pix/pix)). Lecture et écriture des `.xlsx` sans dépendance.
 - `src/index.html` : l'interface.
+- `src/pdf_report.py` : fiches PDF par élève, écrites à la main comme dans LogiExam (bandeau, synthèse de la note, cartes).
 - `suivi_pix.spec` : construction de l'app avec PyInstaller.
 - `.github/workflows/build-macos.yml` : construction automatique sur un Mac de GitHub, tests, puis publication.
 

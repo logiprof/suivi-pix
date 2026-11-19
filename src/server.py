@@ -21,9 +21,10 @@ import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 # Dans l'app construite (PyInstaller), les fichiers sont dans sys._MEIPASS
 HERE = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # pdf_report.py a cote du serveur
 if sys.platform == "darwin":
     SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/Suivi Pix")
 else:
@@ -513,6 +514,15 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/log":
             log("page : " + str(data.get("msg", ""))[:500])
             return self._send(200, {"ok": True})
+        if path == "/api/pdf":
+            import pdf_report
+            try:
+                data_pdf = pdf_report.make_pdfs(data.get("students") or [], data.get("meta") or {}, data.get("mode") or "combined")
+                return self._send(200, {"ok": True, "b64": base64.b64encode(data_pdf).decode("ascii")})
+            except Exception:
+                import traceback
+                log("ERREUR PDF :\n" + traceback.format_exc())
+                return self._send(200, {"ok": False, "error": "La création du PDF a échoué."})
         if path == "/api/quit":
             log("arret : bouton Quitter")
             self._send(200, {"ok": True})

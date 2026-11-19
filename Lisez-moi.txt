@@ -42,6 +42,24 @@ SUIVI PIX — mode d'emploi
    - « Quitter » pour arrêter l'app (elle s'arrête aussi seule quelques minutes
      après la fermeture de l'onglet).
 
+   - « Passer à la notation → » (ou l'onglet « 2. Notation ») : tous les élèves
+     de l'analyse avec leurs niveaux, le total (11 points au maximum), les
+     pénalités et la note = points × 5 / 11 + 1 (entre 1 et 6, arrondie au
+     demi-point comme LogiExam).
+       · Pénalités manuelles à cocher dans le tableau : retard, remise par le
+         mauvais canal, mauvais identifiant (+ « Autre », points libres).
+         Types et points modifiables dans « Barème et pénalités… ».
+       · ✎ : détail d'un élève (niveaux, remarque, statut). Identifiants
+         corrigés → « Vérifier sur Pix » récupère les niveaux et coche
+         « Mauvais identifiant ».
+       · « + Ajouter un élève » : élève remis par un autre canal (« Remise par
+         le mauvais canal » cochée d'office), niveaux saisis ou vérifiés sur Pix.
+       · Travail non remis : note 1 (modifiable dans le barème).
+       · Tout est enregistré automatiquement (sans mot de passe).
+   - Fiches PDF (style LogiExam, une page par élève) : « PDF : tous les élèves »
+     (un fichier à imprimer) ou « un fichier par élève (.zip) », ou le lien PDF
+     d'une ligne. « Notes (Excel) » : tableau des notes et barème.
+
 3. CONFIDENTIALITÉ
    - Les mots de passe ne sont jamais enregistrés par l'app : seuls vos choix de
      compétences et le dernier tableau de niveaux sont gardés dans

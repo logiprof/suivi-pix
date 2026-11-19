@@ -51,6 +51,10 @@ jobs:
           curl -fsS -X POST -H "X-Suivi-Token: $TOKEN" -H "Content-Type: application/json" \
             -d '{"domain":"app.pix.fr","login":"test","password":"x"}' http://127.0.0.1:8765/api/check | grep -q '"ok": true'
           echo "vérification (mode test) OK"
+          curl -fsS -X POST -H "X-Suivi-Token: $TOKEN" -H "Content-Type: application/json" \
+            -d '{"mode":"combined","meta":{"maxPoints":11},"students":[{"name":"Test Élève","grade":"5.50","competences":[{"index":"3.1","name":"Textes","right":"Niveau 4"}]}]}' \
+            http://127.0.0.1:8765/api/pdf | grep -q '"ok": true'
+          echo "PDF OK"
           curl -fsS -X POST -H "X-Suivi-Token: $TOKEN" -d '{}' http://127.0.0.1:8765/api/quit
 
       - name: Diagnostic — vraie connexion à Pix (faux compte)

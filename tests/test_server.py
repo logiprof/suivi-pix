@@ -54,6 +54,22 @@ class XlsxTests(unittest.TestCase):
             server.read_xlsx(b"pas un classeur")
 
 
+class PdfTests(unittest.TestCase):
+    def test_student_pdf_one_page_each(self):
+        import pdf_report
+        st = {"name": "Dupont Léa", "classe": "9VG2", "login": "lea", "date": "12.11.2026 08:05", "status": "evalue",
+              "total": 12, "totalLabel": "12 (4 + 2 + 6)", "counted": 11, "penaltyTotal": 1, "finalPoints": 10, "grade": "5.50",
+              "competences": [{"index": "3.1", "name": "Développer des documents textuels", "right": "Niveau 4", "detail": "39 Pix", "comment": ""}] * 3,
+              "penalties": [{"label": "Retard", "points": 1}], "remark": "Bravo (et merci) \\ ok"}
+        pdf = pdf_report.make_pdfs([st, dict(st, name="Rossi Emma", status="non_remis")], {"title": "Pix", "maxPoints": 11, "rules": ["Règle"]}, "combined")
+        self.assertTrue(pdf.startswith(b"%PDF-1.4"))
+        self.assertIn(b"/Count 2", pdf)
+        z = pdf_report.make_pdfs([st, st], {"maxPoints": 11}, "zip")
+        import zipfile, io
+        names = zipfile.ZipFile(io.BytesIO(z)).namelist()
+        self.assertEqual(names, ["9VG2 - Dupont Léa.pdf", "9VG2 - Dupont Léa (2).pdf"])
+
+
 class ServerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

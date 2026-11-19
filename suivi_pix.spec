@@ -9,6 +9,7 @@ with open(os.path.join("src", "server.py"), encoding="utf-8") as f:
 a = Analysis(
     ["src/server.py"],
     datas=[("src/index.html", ".")],
+    hiddenimports=["pdf_report"],
     excludes=["tkinter", "unittest", "pydoc", "doctest", "lib2to3"],
     noarchive=False,
 )
