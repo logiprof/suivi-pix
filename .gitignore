@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+build/
+dist/
+pack/
+*.zip
+.DS_Store
+# Ne jamais versionner de fichiers d'élèves
+*.csv
+*.xlsx

@@ -1,0 +1,76 @@
+name: App Mac
+
+# Construit « Suivi Pix.app » (Intel + Apple Silicon) sur un Mac de GitHub.
+# - à chaque modification : l'app est disponible dans l'onglet Actions (Artifacts)
+# - pour une version officielle : créer un tag v1.2.0 → une Release avec le .zip
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PY_VERSION: "3.12.8"
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer Python (python.org, universal2)
+        run: |
+          curl -fsSLo python.pkg "https://www.python.org/ftp/python/${PY_VERSION}/python-${PY_VERSION}-macos11.pkg"
+          sudo installer -pkg python.pkg -target /
+          PY="/Library/Frameworks/Python.framework/Versions/${PY_VERSION%.*}/bin/python3"
+          "$PY" --version
+          echo "PY=$PY" >> "$GITHUB_ENV"
+
+      - name: Tests
+        run: $PY -m unittest discover -s tests -v
+
+      - name: Installer PyInstaller
+        run: $PY -m pip install --disable-pip-version-check pyinstaller==6.11.1
+
+      - name: Construire l'app
+        run: $PY -m PyInstaller --noconfirm --clean suivi_pix.spec
+
+      - name: Vérifier l'app construite
+        run: |
+          APP="dist/Suivi Pix.app"
+          lipo -archs "$APP/Contents/MacOS/Suivi Pix"
+          codesign --verify --deep --strict "$APP" && echo "signature ad hoc OK"
+          SUIVI_PIX_MOCK=1 SUIVI_PIX_NO_BROWSER=1 SUIVI_PIX_PORT=8765 "$APP/Contents/MacOS/Suivi Pix" &
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8765/ -o page.html && break; sleep 1; done
+          grep -q "Suivi Pix" page.html && echo "page servie OK"
+          TOKEN=$(grep -o 'const TOKEN = "[^"]*"' page.html | cut -d'"' -f2)
+          curl -fsS -X POST -H "X-Suivi-Token: $TOKEN" -H "Content-Type: application/json" \
+            -d '{"domain":"app.pix.fr","login":"test","password":"x"}' http://127.0.0.1:8765/api/check | grep -q '"ok": true'
+          echo "vérification (mode test) OK"
+          curl -fsS -X POST -H "X-Suivi-Token: $TOKEN" -d '{}' http://127.0.0.1:8765/api/quit
+
+      - name: Préparer le .zip
+        run: |
+          mkdir -p "pack/Suivi Pix"
+          ditto "dist/Suivi Pix.app" "pack/Suivi Pix/Suivi Pix.app"
+          cp "Lisez-moi.txt" "pack/Suivi Pix/"
+          ditto -c -k --sequesterRsrc --keepParent "pack/Suivi Pix" Suivi-Pix-macOS.zip
+          ls -lh Suivi-Pix-macOS.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Suivi-Pix-macOS
+          path: Suivi-Pix-macOS.zip
+
+      - name: Publier la Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" Suivi-Pix-macOS.zip \
+            --title "Suivi Pix $GITHUB_REF_NAME" \
+            --notes "Télécharger **Suivi-Pix-macOS.zip**, le décompresser et glisser « Suivi Pix.app » dans Applications. Voir le Lisez-moi pour le premier lancement."

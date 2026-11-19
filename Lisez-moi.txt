@@ -1,0 +1,43 @@
+SUIVI PIX — mode d'emploi
+
+1. INSTALLER
+   - Glissez « Suivi Pix.app » dans le dossier Applications.
+   - Premier lancement : macOS bloque les apps téléchargées qui ne viennent pas
+     de l'App Store. Double-cliquez une fois, fermez le message, puis allez dans
+     Réglages Système > Confidentialité et sécurité, tout en bas :
+     « Suivi Pix a été bloqué » > Ouvrir quand même.
+     (Ou, dans le Terminal :  xattr -dr com.apple.quarantine "/Applications/Suivi Pix.app")
+
+2. UTILISER
+   - L'app s'ouvre dans votre navigateur (adresse 127.0.0.1 : elle tourne
+     uniquement sur votre Mac).
+   - Déposez l'export Excel de Microsoft Forms (.xlsx) ou un CSV. L'app repère
+     seule les colonnes Nom / Identifiant / Mot de passe ; vérifiez l'aperçu et
+     corrigez le choix des colonnes si besoin (il est retenu pour la prochaine fois).
+     Si un élève a répondu deux fois au formulaire, sa dernière réponse est gardée.
+   - « Vérifier les niveaux… » : choisissez les compétences à observer (et un
+     niveau visé si vous voulez), puis lancez.
+   - Tableau : niveau et Pix de chaque élève par compétence, plus le TOTAL des
+     niveaux des compétences choisies. Une compétence pas commencée compte 0.
+     Cliquez sur un titre de colonne pour trier. « changer » permet d'afficher
+     d'autres compétences sans relancer la vérification.
+   - Les comptes qui n'ont pas pu se connecter sont listés à part, sous le
+     tableau (« Copier la liste » pour les coller dans un message).
+   - « Exporter en Excel » : un classeur avec 3 onglets (Résultats,
+     Connexions impossibles, Infos).
+   - « Quitter » pour arrêter l'app (elle s'arrête aussi seule quelques minutes
+     après la fermeture de l'onglet).
+
+3. CONFIDENTIALITÉ
+   - Les mots de passe ne sont jamais enregistrés par l'app : seuls vos choix de
+     compétences et le dernier tableau de niveaux sont gardés dans
+     ~/Library/Application Support/Suivi Pix/
+   - Rangez le fichier des mots de passe (export Forms) dans un endroit protégé et
+     supprimez-le quand vous n'en avez plus besoin.
+
+4. SI ÇA NE MARCHE PAS
+   - « Identifiant ou mot de passe incorrect » : vérifiez la ligne du CSV.
+     Attention, trop d'essais ratés bloquent temporairement le compte de l'élève.
+   - Comptes créés sur pix.org plutôt que pix.fr : changez la plateforme en haut
+     à droite.
+   - Comptes connectés via l'ENT/GAR (sans mot de passe Pix) : non pris en charge.

@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suivi Pix</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --card: #fff; --ink: #1d1d1f; --muted: #6e6e73; --line: #e3e1dc;
+    --accent: #3d4fd6; --ok: #2f8f5b; --ok-bg: #e3f4ea; --mid: #b26a00; --mid-bg: #fdf0d9;
+    --low: #8a8a8e; --low-bg: #f0efec; --err: #c0392b; --err-bg: #fbe7e4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161618; --card:#202023; --ink:#f2f2f4; --muted:#9a9aa0; --line:#35353a;
+      --accent:#8b97ff; --ok:#6fd39b; --ok-bg:#1d3a2a; --mid:#f0b45a; --mid-bg:#3d2f17;
+      --low:#9a9aa0; --low-bg:#2a2a2e; --err:#ff8a7a; --err-bg:#43211d; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.45 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; background:var(--bg); color:var(--ink); }
+  header { display:flex; align-items:center; justify-content:space-between; padding:16px 28px; border-bottom:1px solid var(--line); background:var(--card); position:sticky; top:0; z-index:5; }
+  header h1 { margin:0; font-size:20px; letter-spacing:-.01em; }
+  header h1 span { color:var(--muted); font-weight:400; font-size:14px; margin-left:8px; }
+  main { max-width:1200px; margin:0 auto; padding:24px 28px 60px; display:grid; gap:20px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px 22px; }
+  h2 { margin:0 0 4px; font-size:16px; display:flex; align-items:center; gap:8px; }
+  .hint { color:var(--muted); font-size:13px; margin:0 0 14px; }
+  button { font:inherit; border-radius:9px; border:1px solid var(--line); background:var(--card); color:var(--ink); padding:7px 14px; cursor:pointer; }
+  button:hover { border-color:var(--muted); }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  button.link { border:none; background:none; color:var(--accent); padding:0; text-decoration:underline; }
+  button:disabled { opacity:.45; cursor:default; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .drop { border:1.5px dashed var(--line); border-radius:12px; padding:18px; text-align:center; color:var(--muted); cursor:pointer; }
+  .drop.over { border-color:var(--accent); color:var(--accent); }
+  .pill { display:inline-block; padding:2px 10px; border-radius:99px; background:var(--low-bg); font-size:13px; }
+  .pill.err { background:var(--err-bg); color:var(--err); }
+  .mapping { display:grid; grid-template-columns:repeat(auto-fill, minmax(250px,1fr)); gap:10px 18px; margin-top:14px; }
+  .mapping label { display:grid; gap:3px; font-size:13px; color:var(--muted); }
+  .mapping select { width:100%; }
+  select { font:inherit; padding:4px 6px; border-radius:7px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:100%; }
+  .comp-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(330px,1fr)); gap:4px 22px; }
+  .area { grid-column:1/-1; margin:12px 0 2px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:600; }
+  .comp { display:flex; align-items:center; gap:8px; padding:4px 0; }
+  .comp label { flex:1; display:flex; gap:8px; align-items:center; cursor:pointer; }
+  .comp .idx { font-variant-numeric:tabular-nums; color:var(--muted); width:26px; }
+  .progress { height:6px; background:var(--low-bg); border-radius:99px; overflow:hidden; flex:1; min-width:120px; }
+  .progress div { height:100%; width:0; background:var(--accent); transition:width .2s; }
+  .table-wrap { overflow:auto; margin-top:14px; border:1px solid var(--line); border-radius:10px; max-height:70vh; }
+  table { border-collapse:collapse; width:100%; font-size:14px; }
+  th, td { padding:7px 10px; border-bottom:1px solid var(--line); text-align:center; white-space:nowrap; }
+  th { position:sticky; top:0; background:var(--card); font-size:12px; color:var(--muted); font-weight:600; z-index:1; }
+  th[data-sort] { cursor:pointer; user-select:none; }
+  th.name, td.name { text-align:left; position:sticky; left:0; background:var(--card); }
+  th.name { z-index:3; }
+  td.left { text-align:left; }
+  td.lvl { font-weight:600; font-variant-numeric:tabular-nums; line-height:1.2; }
+  td.lvl small { display:block; font-weight:400; font-size:11px; color:var(--muted); }
+  td.ok { background:var(--ok-bg); color:var(--ok); }
+  td.mid { background:var(--mid-bg); color:var(--mid); }
+  td.low { color:var(--low); }
+  td.total { font-weight:700; border-left:2px solid var(--line); }
+  th.total { border-left:2px solid var(--line); }
+  td.err { color:var(--err); text-align:left; white-space:normal; }
+  tr.summary td { font-weight:600; background:var(--low-bg); }
+  .legend { display:flex; gap:14px; font-size:13px; color:var(--muted); margin-top:10px; flex-wrap:wrap; }
+  .legend i { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-1px; margin-right:5px; }
+  .muted { color:var(--muted); }
+  .preview { margin-top:12px; font-size:13px; }
+  .preview td, .preview th { padding:4px 8px; text-align:left; }
+  dialog { border:none; border-radius:16px; padding:0; width:min(980px, 94vw); max-height:90vh; background:var(--card); color:var(--ink); box-shadow:0 20px 60px rgba(0,0,0,.25); }
+  dialog::backdrop { background:rgba(20,20,30,.35); }
+  .dlg-head { padding:18px 22px 6px; }
+  .dlg-body { padding:0 22px; overflow:auto; max-height:calc(90vh - 150px); }
+  .dlg-foot { padding:14px 22px; border-top:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  #errSection { border-color:var(--err-bg); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Suivi Pix <span>niveaux de mes élèves · v__VERSION__</span></h1>
+  <div class="row">
+    <select id="domain" title="Plateforme Pix">
+      <option value="app.pix.fr">app.pix.fr</option>
+      <option value="app.pix.org">app.pix.org</option>
+    </select>
+    <button id="quit">Quitter</button>
+  </div>
+</header>
+
+<main>
+  <section>
+    <h2>1. Fichier des élèves</h2>
+    <p class="hint">Déposez l'export Excel de Microsoft Forms (.xlsx) ou un fichier CSV. Les mots de passe restent en mémoire pendant que l'app est ouverte, ils ne sont jamais enregistrés.</p>
+    <div id="drop" class="drop">Glisser le fichier Excel ou CSV ici, ou <u>cliquer pour le choisir</u></div>
+    <input id="file" type="file" accept=".xlsx,.csv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden>
+    <div id="mappingBox" hidden>
+      <div class="mapping">
+        <label>Nom de l'élève<select id="mapName"></select></label>
+        <label>Prénom (facultatif)<select id="mapFirst"></select></label>
+        <label>Identifiant Pix (e-mail ou identifiant)<select id="mapLogin"></select></label>
+        <label>Mot de passe Pix<select id="mapPassword"></select></label>
+      </div>
+      <div id="preview" class="preview"></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <span id="studentsInfo" class="pill">Aucun fichier chargé</span>
+      <button id="template" class="link">Télécharger un modèle CSV</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. Résultats</h2>
+    <div class="row">
+      <button id="run" class="primary" disabled>Vérifier les niveaux…</button>
+      <button id="stop" hidden>Arrêter</button>
+      <div class="progress"><div id="bar"></div></div>
+      <span id="progressText" class="muted" style="font-size:13px"></span>
+      <button id="export" disabled>Exporter en Excel</button>
+    </div>
+    <p id="lastRun" class="hint" style="margin:10px 0 0"></p>
+    <div id="results"></div>
+    <div id="legend" class="legend" hidden>
+      <span><i style="background:var(--ok-bg);border:1px solid var(--ok)"></i>niveau visé atteint</span>
+      <span><i style="background:var(--mid-bg);border:1px solid var(--mid)"></i>en dessous du niveau visé</span>
+      <span>– = compétence pas commencée (compte 0)</span>
+      <span>Total = somme des niveaux des compétences choisies</span>
+    </div>
+  </section>
+
+  <section id="errSection" hidden>
+    <h2>Connexions impossibles <span id="errCount" class="pill err"></span></h2>
+    <p class="hint">Ces comptes n'ont pas pu être vérifiés. Corrigez l'identifiant ou le mot de passe dans le fichier, puis relancez.</p>
+    <div class="row"><button id="copyErr">Copier la liste</button></div>
+    <div id="errors"></div>
+  </section>
+</main>
+
+<dialog id="compDialog">
+  <div class="dlg-head">
+    <h2 id="dlgTitle">Quelles compétences observer ?</h2>
+    <p class="hint" style="margin:0 0 8px">Cochez les compétences Pix à afficher. Le niveau visé est facultatif : il colore les cases (vert = atteint). Le total additionne les niveaux des compétences cochées.</p>
+    <div class="row" style="margin-bottom:6px">
+      <button id="all">Tout cocher</button><button id="none">Tout décocher</button>
+      <span class="muted" style="font-size:13px">Niveau visé pour les cochées :</span>
+      <select id="targetAll"></select>
+    </div>
+  </div>
+  <div class="dlg-body"><div id="comps" class="comp-grid"></div></div>
+  <div class="dlg-foot">
+    <span id="dlgCount" class="muted" style="font-size:13px"></span>
+    <div class="row"><button id="dlgCancel">Annuler</button><button id="dlgOk" class="primary">Lancer la vérification</button></div>
+  </div>
+</dialog>
+
+<script>
+const TOKEN = "__SESSION_TOKEN__";
+const AREAS = [
+  ["1", "Information et données", [["1.1","Mener une recherche et une veille d'information"],["1.2","Gérer des données"],["1.3","Traiter des données"]]],
+  ["2", "Communication et collaboration", [["2.1","Interagir"],["2.2","Partager et publier"],["2.3","Collaborer"],["2.4","S'insérer dans le monde numérique"]]],
+  ["3", "Création de contenu", [["3.1","Développer des documents textuels"],["3.2","Développer des documents multimédia"],["3.3","Adapter les documents à leur finalité"],["3.4","Programmer"]]],
+  ["4", "Protection et sécurité", [["4.1","Sécuriser l'environnement numérique"],["4.2","Protéger les données personnelles et la vie privée"],["4.3","Protéger la santé, le bien-être et l'environnement"]]],
+  ["5", "Environnement numérique", [["5.1","Résoudre des problèmes techniques"],["5.2","Construire un environnement numérique"]]],
+];
+const MAX_LEVEL = 8;
+const idxKey = (i) => String(i).split(".").map(n => n.padStart(3, "0")).join(".");
+
+let settings = { selected: ["1.1","3.1","4.1"], targets: {}, domain: "app.pix.fr", mapping: {}, knownComps: {} };
+let sheet = null;            // {headers:[], rows:[[]]}  (mémoire uniquement)
+let students = [];           // {name, login, password}
+let invalid = [];            // lignes sans identifiant ou mot de passe
+let results = null;          // {date, domain, rows:[...], failures:[...]}
+let running = false, stopRequested = false;
+let sortKey = "name", sortDir = 1;
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const norm = (s) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+
+async function api(path, body = {}) {
+  const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Suivi-Token": TOKEN }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+function save() { api("/api/settings/save", { ...settings, lastResults: results }).catch(() => {}); }
+
+/* ---------- Liste des compétences (complétée par ce que Pix renvoie) ---------- */
+function compList() {
+  const map = {};
+  for (const [code, area, list] of AREAS) for (const [i, n] of list) map[i] = { index: i, name: n, area, areaCode: code };
+  for (const [i, c] of Object.entries(settings.knownComps || {})) map[i] = { ...(map[i] || {}), index: i, name: c.name || map[i]?.name || i, area: c.area || map[i]?.area || "Autres", areaCode: i.split(".")[0] };
+  return Object.values(map).sort((a, b) => idxKey(a.index) < idxKey(b.index) ? -1 : 1);
+}
+const compName = (i) => (compList().find(c => c.index === i) || {}).name || i;
+function learnComps(cards) {
+  let changed = false;
+  for (const c of cards) {
+    if (!c.index || !c.name) continue;
+    const old = settings.knownComps[c.index];
+    if (!old || old.name !== c.name || (c.area && old.area !== c.area)) { settings.knownComps[c.index] = { name: c.name, area: c.area || (old && old.area) || "" }; changed = true; }
+  }
+  return changed;
+}
+
+/* ---------- Fenêtre de choix des compétences ---------- */
+let draft = null, dlgMode = "run";
+function levelOptions(sel) {
+  let o = '<option value="">—</option>';
+  for (let i = 1; i <= MAX_LEVEL; i++) o += `<option value="${i}"${String(sel) === String(i) ? " selected" : ""}>niv. ${i}</option>`;
+  return o;
+}
+function renderComps() {
+  let h = "", lastArea = null;
+  for (const c of compList()) {
+    if (c.area !== lastArea) { h += `<div class="area">${esc(c.area)}</div>`; lastArea = c.area; }
+    const on = draft.selected.includes(c.index);
+    h += `<div class="comp"><label><input type="checkbox" data-idx="${esc(c.index)}"${on ? " checked" : ""}>
+      <span class="idx">${esc(c.index)}</span><span>${esc(c.name)}</span></label>
+      <select data-target="${esc(c.index)}" title="Niveau visé">${levelOptions(draft.targets[c.index] || "")}</select></div>`;
+  }
+  $("comps").innerHTML = h;
+  updateDlgCount();
+}
+function updateDlgCount() {
+  const n = draft.selected.length;
+  $("dlgCount").textContent = n ? `${n} compétence${n > 1 ? "s" : ""} choisie${n > 1 ? "s" : ""}` : "Choisissez au moins une compétence";
+  $("dlgOk").disabled = !n;
+}
+function openDialog(mode) {
+  dlgMode = mode;
+  draft = { selected: [...settings.selected], targets: { ...settings.targets } };
+  $("dlgTitle").textContent = mode === "run" ? "Quelles compétences observer ?" : "Changer les compétences affichées";
+  $("dlgOk").textContent = mode === "run" ? `Lancer la vérification (${students.length} élève${students.length > 1 ? "s" : ""})` : "Appliquer";
+  $("targetAll").innerHTML = levelOptions("");
+  renderComps();
+  $("compDialog").showModal();
+}
+$("comps").addEventListener("change", (e) => {
+  const t = e.target;
+  if (t.dataset.idx) {
+    const s = new Set(draft.selected);
+    t.checked ? s.add(t.dataset.idx) : s.delete(t.dataset.idx);
+    draft.selected = compList().map(c => c.index).filter(k => s.has(k));
+    updateDlgCount();
+  } else if (t.dataset.target) {
+    if (t.value) draft.targets[t.dataset.target] = Number(t.value); else delete draft.targets[t.dataset.target];
+  }
+});
+$("all").onclick = () => { draft.selected = compList().map(c => c.index); renderComps(); };
+$("none").onclick = () => { draft.selected = []; renderComps(); };
+$("targetAll").onchange = (e) => {
+  for (const k of draft.selected) { if (e.target.value) draft.targets[k] = Number(e.target.value); else delete draft.targets[k]; }
+  e.target.value = ""; renderComps();
+};
+$("dlgCancel").onclick = () => $("compDialog").close();
+$("dlgOk").onclick = () => {
+  settings.selected = draft.selected; settings.targets = draft.targets;
+  $("compDialog").close(); save(); renderResults();
+  if (dlgMode === "run") runCheck();
+};
+$("domain").onchange = (e) => { settings.domain = e.target.value; save(); };
+
+/* ---------- Lecture du fichier (Excel ou CSV) ---------- */
+function decode(buf) {
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(buf); }
+  catch { return new TextDecoder("windows-1252").decode(buf); }
+}
+function parseCSV(text) {
+  text = text.replace(/^﻿/, "");
+  const first = text.split(/\r?\n/)[0] || "";
+  const delim = [";", "\t", ","].map(d => [d, first.split(d).length]).sort((a, b) => b[1] - a[1])[0][0];
+  const rows = []; let row = [], cell = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+    else if (c === '"') q = true;
+    else if (c === delim) { row.push(cell); cell = ""; }
+    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(cell); rows.push(row); row = []; cell = ""; }
+    else cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+function toB64(buf) {
+  const bytes = new Uint8Array(buf); let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+async function readFile(f) {
+  $("studentsInfo").className = "pill"; $("studentsInfo").textContent = "Lecture…";
+  const buf = await f.arrayBuffer();
+  let rows;
+  const isZip = new Uint8Array(buf.slice(0, 2)).join(",") === "80,75";
+  if (/\.xlsx$/i.test(f.name) || isZip) {
+    const r = await api("/api/xlsx/read", { b64: toB64(buf) });
+    if (!r.ok) { $("studentsInfo").className = "pill err"; $("studentsInfo").textContent = r.error; return; }
+    rows = r.rows;
+  } else if (/\.xls$/i.test(f.name)) {
+    $("studentsInfo").className = "pill err"; $("studentsInfo").textContent = "Ancien format .xls : enregistrez le fichier en .xlsx depuis Excel."; return;
+  } else {
+    rows = parseCSV(decode(buf));
+  }
+  rows = rows.map(r => r.map(c => String(c ?? "").trim())).filter(r => r.some(c => c));
+  if (!rows.length) { $("studentsInfo").className = "pill err"; $("studentsInfo").textContent = "Le fichier est vide."; return; }
+  setSheet(rows, f.name);
+}
+
+const FORMS_META = ["id", "heure de debut", "heure de fin", "adresse de messagerie", "nom", "heure de la derniere modification",
+  "start time", "completion time", "email", "name", "last modified time", "points totaux", "total points", "commentaires du questionnaire", "quiz feedback"];
+function guessMapping(headers) {
+  const h = headers.map(norm);
+  const isMeta = (i) => FORMS_META.includes(h[i]);
+  const used = new Set();
+  const find = (re, not) => {
+    const order = [...h.keys()].sort((a, b) => isMeta(a) - isMeta(b));   // questions du formulaire d'abord
+    for (const i of order) if (!used.has(i) && re.test(h[i]) && !(not && not.test(h[i]))) { used.add(i); return i; }
+    return -1;
+  };
+  const password = find(/mot de passe|password|mdp/);
+  const login = find(/identifiant|login|nom d.?utilisateur|username|adresse.*pix|mail.*pix|pix.*(mail|adresse|compte)|compte pix/);
+  const loginFinal = login >= 0 ? login : find(/e-?mail|courriel|adresse/);
+  const first = find(/prenom|first ?name/, /\bnom\b.*prenom|prenom.*\bnom\b/);
+  const name = find(/nom|eleve|name|apprenti|etudiant|participant/, /utilisateur|user/);
+  return { name, first, login: loginFinal, password };
+}
+function setSheet(rows, fileName) {
+  const hdr = rows[0];
+  const g = guessMapping(hdr);
+  const hasHeader = g.password >= 0 || g.login >= 0;
+  if (hasHeader) {
+    sheet = { headers: hdr.map((x, i) => x || `Colonne ${i + 1}`), rows: rows.slice(1), fileName };
+  } else {
+    const w = Math.max(...rows.map(r => r.length));
+    sheet = { headers: [...Array(w).keys()].map(i => `Colonne ${String.fromCharCode(65 + i)}`), rows, fileName };
+  }
+  // mapping : celui enregistré la dernière fois s'il correspond aux colonnes, sinon détection
+  const saved = settings.mapping || {};
+  const byName = (k) => saved[k] ? sheet.headers.indexOf(saved[k]) : -1;
+  let m = hasHeader ? g : { name: 0, first: -1, login: rows[0].length >= 3 ? 1 : 0, password: rows[0].length >= 3 ? 2 : 1 };
+  if (byName("login") >= 0 && byName("password") >= 0) m = { name: byName("name"), first: byName("first"), login: byName("login"), password: byName("password") };
+  for (const [k, id] of [["name", "mapName"], ["first", "mapFirst"], ["login", "mapLogin"], ["password", "mapPassword"]]) {
+    const opt = `<option value="-1">— aucune —</option>` + sheet.headers.map((x, i) => `<option value="${i}">${esc(x)}</option>`).join("");
+    $(id).innerHTML = opt; $(id).value = String(m[k] ?? -1);
+  }
+  $("mappingBox").hidden = false;
+  buildStudents();
+}
+["mapName", "mapFirst", "mapLogin", "mapPassword"].forEach(id => $(id).onchange = () => {
+  settings.mapping = Object.fromEntries([["name", "mapName"], ["first", "mapFirst"], ["login", "mapLogin"], ["password", "mapPassword"]]
+    .map(([k, i]) => [k, Number($(i).value) >= 0 ? sheet.headers[Number($(i).value)] : ""]));
+  save(); buildStudents();
+});
+function buildStudents() {
+  const mi = (id) => Number($(id).value);
+  const [cN, cF, cL, cP] = [mi("mapName"), mi("mapFirst"), mi("mapLogin"), mi("mapPassword")];
+  const get = (r, c) => c >= 0 ? String(r[c] ?? "").trim() : "";
+  const byLogin = new Map(); invalid = []; let dup = 0;
+  for (const r of sheet.rows) {
+    const login = get(r, cL), password = get(r, cP);
+    const name = [get(r, cN), get(r, cF)].filter(Boolean).join(" ") || login || "(sans nom)";
+    if (!login || !password) { invalid.push({ name, login, error: !login ? "Identifiant manquant dans le fichier." : "Mot de passe manquant dans le fichier." }); continue; }
+    const key = login.toLowerCase();
+    if (byLogin.has(key)) dup++;
+    byLogin.set(key, { name, login, password });   // la dernière réponse du formulaire l'emporte
+  }
+  students = [...byLogin.values()];
+  // aperçu
+  const sample = sheet.rows.slice(0, 3);
+  const mask = (v) => v ? "•".repeat(Math.min(8, v.length)) : "";
+  $("preview").innerHTML = sample.length ? `<div class="table-wrap" style="max-height:none"><table><thead><tr><th>Nom</th><th>Identifiant</th><th>Mot de passe</th></tr></thead><tbody>` +
+    sample.map(r => `<tr><td>${esc([get(r, cN), get(r, cF)].filter(Boolean).join(" "))}</td><td>${esc(get(r, cL))}</td><td>${mask(get(r, cP))}</td></tr>`).join("") +
+    `</tbody></table></div><p class="hint" style="margin:6px 0 0">Aperçu des 3 premières lignes : vérifiez que les bonnes colonnes sont choisies.</p>` : "";
+  let info = `${esc(sheet.fileName)} · ${students.length} élève${students.length > 1 ? "s" : ""}`;
+  if (dup) info += ` · ${dup} doublon${dup > 1 ? "s" : ""} (dernière réponse gardée)`;
+  if (invalid.length) info += ` · ${invalid.length} ligne${invalid.length > 1 ? "s" : ""} incomplète${invalid.length > 1 ? "s" : ""}`;
+  $("studentsInfo").className = "pill"; $("studentsInfo").innerHTML = info;
+  $("run").disabled = running || !(students.length || invalid.length);
+}
+const drop = $("drop");
+drop.onclick = () => $("file").click();
+$("file").onchange = (e) => { e.target.files[0] && readFile(e.target.files[0]); e.target.value = ""; };
+drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("over"); e.dataTransfer.files[0] && readFile(e.dataTransfer.files[0]); };
+
+function downloadBlob(name, blob) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+$("template").onclick = () => downloadBlob("eleves-pix-modele.csv", new Blob(["﻿nom;identifiant;mot de passe\nDupont Léa;lea.dupont1234;MotDePasse1\nMartin Noah;noah.martin@exemple.ch;MotDePasse2\n"], { type: "text/csv;charset=utf-8" }));
+
+/* ---------- Vérification ---------- */
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+$("run").onclick = () => { if (!running) openDialog("run"); };
+async function runCheck() {
+  running = true; stopRequested = false;
+  $("run").disabled = true; $("stop").hidden = false; $("export").disabled = true;
+  results = { date: new Date().toISOString(), domain: settings.domain, rows: [], failures: invalid.map(x => ({ ...x })) };
+  renderResults();
+  const list = [...students];
+  for (let i = 0; i < list.length; i++) {
+    if (stopRequested) break;
+    const s = list[i];
+    $("progressText").textContent = `${i + 1} / ${list.length} · ${s.name}`;
+    $("bar").style.width = (i / list.length * 100) + "%";
+    let res;
+    try { res = await api("/api/check", { domain: settings.domain, login: s.login, password: s.password }); }
+    catch (e) { res = { ok: false, error: "L'app ne répond plus (" + e.message + ")." }; }
+    if (res.ok) {
+      const row = { name: s.name, login: s.login, pixScore: res.pixScore, levels: {} };
+      for (const c of res.scorecards) row.levels[c.index] = { level: c.level, earnedPix: c.earnedPix, status: c.status, remainingPix: c.remainingPix };
+      results.rows.push(row);
+      if (learnComps(res.scorecards)) save();
+    } else {
+      results.failures.push({ name: s.name, login: s.login, error: res.error || "Erreur inconnue." });
+    }
+    renderResults();
+    if (i < list.length - 1) await sleep(700);  // on reste raisonnable avec les serveurs Pix
+  }
+  $("bar").style.width = "100%";
+  const nf = results.failures.length;
+  $("progressText").textContent = (stopRequested ? "Arrêté · " : "Terminé · ") + `${results.rows.length} vérifié${results.rows.length > 1 ? "s" : ""}` + (nf ? ` · ${nf} connexion${nf > 1 ? "s" : ""} impossible${nf > 1 ? "s" : ""}` : "");
+  running = false; $("stop").hidden = true;
+  $("run").disabled = !(students.length || invalid.length);
+  save(); renderResults();
+}
+$("stop").onclick = () => { stopRequested = true; $("stop").disabled = true; setTimeout(() => $("stop").disabled = false, 1500); };
+
+/* ---------- Calculs ---------- */
+const lvOf = (r, k) => { const l = (r.levels || {})[k]; return !l || l.status === "NOT_STARTED" ? 0 : (l.level || 0); };
+const pixOf = (r, k) => ((r.levels || {})[k] || {}).earnedPix || 0;
+const totalLv = (r) => settings.selected.reduce((a, k) => a + lvOf(r, k), 0);
+const totalPix = (r) => settings.selected.reduce((a, k) => a + pixOf(r, k), 0);
+const targetTotal = () => settings.selected.every(k => settings.targets[k]) ? settings.selected.reduce((a, k) => a + settings.targets[k], 0) : null;
+function cellClass(r, k) {
+  const l = (r.levels || {})[k];
+  if (!l || l.status === "NOT_STARTED") return settings.targets[k] ? "mid low" : "low";
+  const t = settings.targets[k];
+  return !t ? "" : l.level >= t ? "ok" : "mid";
+}
+function sortedRows() {
+  const val = (r) => sortKey === "name" ? norm(r.name) : sortKey === "total" ? totalLv(r) * 10000 + totalPix(r) : lvOf(r, sortKey) * 10000 + pixOf(r, sortKey);
+  return [...results.rows].sort((a, b) => (val(a) > val(b) ? 1 : val(a) < val(b) ? -1 : 0) * sortDir);
+}
+
+/* ---------- Affichage ---------- */
+function renderResults() {
+  const has = results && (results.rows.length || results.failures.length);
+  $("legend").hidden = !(results && results.rows.length);
+  if (!has) { $("results").innerHTML = ""; $("lastRun").textContent = "Aucune vérification pour l'instant."; $("errSection").hidden = true; $("export").disabled = true; return; }
+  const d = new Date(results.date);
+  $("lastRun").innerHTML = `Vérification du ${d.toLocaleDateString("fr-CH")} à ${d.toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" })} sur ${esc(results.domain)} · ` +
+    `Compétences : <b>${settings.selected.map(esc).join(", ") || "aucune"}</b> <button class="link" id="changeComps">changer</button>`;
+  $("changeComps").onclick = () => openDialog("view");
+
+  const cols = settings.selected;
+  const arrow = (k) => sortKey === k ? (sortDir > 0 ? " ▲" : " ▼") : "";
+  const tt = targetTotal();
+  let h = "";
+  if (results.rows.length) {
+    h = `<div class="table-wrap"><table><thead><tr><th class="name" data-sort="name">Élève${arrow("name")}</th>`;
+    for (const k of cols) {
+      const t = settings.targets[k];
+      h += `<th data-sort="${esc(k)}" title="${esc(compName(k))}">${esc(k)} ${esc(shortName(compName(k)))}${t ? `<br><span style="font-weight:400">visé ${t}</span>` : ""}${arrow(k)}</th>`;
+    }
+    h += `<th class="total" data-sort="total">Total niveaux${tt ? `<br><span style="font-weight:400">visé ${tt}</span>` : ""}${arrow("total")}</th></tr></thead><tbody>`;
+    for (const r of sortedRows()) {
+      h += `<tr><td class="name" title="${esc(r.login)}">${esc(r.name)}</td>`;
+      for (const k of cols) {
+        const l = (r.levels || {})[k];
+        const ns = !l || l.status === "NOT_STARTED";
+        const tip = `${compName(k)} — ${pixOf(r, k)} Pix` + (l && l.remainingPix ? `, encore ${l.remainingPix} Pix pour le niveau suivant` : "");
+        h += `<td class="lvl ${cellClass(r, k)}" title="${esc(tip)}">${ns ? "–" : l.level}<small>${pixOf(r, k)} Pix</small></td>`;
+      }
+      const tot = totalLv(r);
+      h += `<td class="lvl total ${tt ? (tot >= tt ? "ok" : "mid") : ""}">${tot}<small>${totalPix(r)} Pix</small></td></tr>`;
+    }
+    const n = results.rows.length;
+    if (n > 1) {
+      h += `<tr class="summary"><td class="name">Moyenne (${n} élèves)</td>`;
+      for (const k of cols) {
+        const t = settings.targets[k];
+        const avg = results.rows.reduce((a, r) => a + lvOf(r, k), 0) / n;
+        const reached = t ? results.rows.filter(r => lvOf(r, k) >= t).length : null;
+        h += `<td class="lvl">${avg.toFixed(1)}<small>${t ? `${reached}/${n} au niveau visé` : ""}</small></td>`;
+      }
+      const avgT = results.rows.reduce((a, r) => a + totalLv(r), 0) / n;
+      h += `<td class="lvl total">${avgT.toFixed(1)}<small>${tt ? results.rows.filter(r => totalLv(r) >= tt).length + "/" + n + " au total visé" : ""}</small></td></tr>`;
+    }
+    h += `</tbody></table></div>`;
+  }
+  $("results").innerHTML = h;
+
+  const f = results.failures;
+  $("errSection").hidden = !f.length;
+  $("errCount").textContent = f.length;
+  $("errors").innerHTML = f.length ? `<div class="table-wrap"><table><thead><tr><th class="name">Élève</th><th style="text-align:left">Identifiant</th><th style="text-align:left">Problème</th></tr></thead><tbody>` +
+    f.map(x => `<tr><td class="name">${esc(x.name)}</td><td class="left">${esc(x.login) || '<span class="muted">(vide)</span>'}</td><td class="err">${esc(x.error)}</td></tr>`).join("") + `</tbody></table></div>` : "";
+  $("export").disabled = running || !has;
+}
+function shortName(n) { return n.length > 22 ? n.slice(0, 20).trim() + "…" : n; }
+$("results").addEventListener("click", (e) => {
+  const th = e.target.closest("th[data-sort]");
+  if (!th) return;
+  const k = th.dataset.sort;
+  if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = k === "name" ? 1 : -1; }
+  renderResults();
+});
+$("copyErr").onclick = async () => {
+  const txt = ["Élève\tIdentifiant\tProblème", ...results.failures.map(x => `${x.name}\t${x.login}\t${x.error}`)].join("\n");
+  try { await navigator.clipboard.writeText(txt); $("copyErr").textContent = "Copié ✓"; }
+  catch { $("copyErr").textContent = "Copie impossible"; }
+  setTimeout(() => $("copyErr").textContent = "Copier la liste", 1800);
+};
+
+/* ---------- Export Excel ---------- */
+$("export").onclick = async () => {
+  const cols = settings.selected, tt = targetTotal();
+  const cls = (r, k) => { const c = cellClass(r, k); return c.includes("ok") ? "ok" : c.includes("mid") ? "mid" : ""; };
+  const H = (v) => ({ v, s: "header" });
+  const res = [[H("Élève"), H("Identifiant"),
+    ...cols.flatMap(k => [H(`${k} ${compName(k)} – niveau` + (settings.targets[k] ? ` (visé ${settings.targets[k]})` : "")), H(`${k} – Pix`)]),
+    H("Total niveaux" + (tt ? ` (visé ${tt})` : "")), H("Total Pix")]];
+  for (const r of sortedRows()) {
+    const tot = totalLv(r);
+    res.push([r.name, r.login, ...cols.flatMap(k => [{ v: lvOf(r, k), s: cls(r, k) }, pixOf(r, k)]),
+      { v: tot, s: tt ? (tot >= tt ? "ok" : "mid") : "bold" }, totalPix(r)]);
+  }
+  const n = results.rows.length;
+  if (n > 1) {
+    const avg = (fn) => Math.round(results.rows.reduce((a, r) => a + fn(r), 0) / n * 10) / 10;
+    res.push([{ v: "Moyenne", s: "bold" }, "", ...cols.flatMap(k => [{ v: avg(r => lvOf(r, k)), s: "bold" }, avg(r => pixOf(r, k))]), { v: avg(totalLv), s: "bold" }, avg(totalPix)]);
+  }
+  const err = [[H("Élève"), H("Identifiant"), H("Problème")], ...results.failures.map(x => [x.name, x.login, { v: x.error, s: "err" }])];
+  const d = new Date(results.date);
+  const info = [[H("Suivi Pix"), H("")], ["Date", d.toLocaleString("fr-CH")], ["Plateforme", results.domain],
+    ["Élèves vérifiés", n], ["Connexions impossibles", results.failures.length], ["", ""],
+    [H("Compétence"), H("Niveau visé")], ...cols.map(k => [`${k} ${compName(k)}`, settings.targets[k] || ""]),
+    ["", ""], ["Une compétence pas commencée compte 0. Total niveaux = somme des niveaux des compétences ci-dessus.", ""]];
+  const sheets = [
+    { name: "Résultats", rows: res, freeze: true, widths: [24, 26, ...cols.flatMap(() => [16, 9]), 14, 10] },
+    { name: "Connexions impossibles", rows: err, freeze: true, widths: [24, 30, 60] },
+    { name: "Infos", rows: info, widths: [60, 14] },
+  ];
+  const r = await api("/api/xlsx/write", { sheets });
+  const bin = atob(r.b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  downloadBlob(`suivi-pix-${d.toISOString().slice(0, 10)}.xlsx`, new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+};
+
+/* ---------- Démarrage / arrêt ---------- */
+$("quit").onclick = async () => {
+  if (running && !confirm("Une vérification est en cours. Quitter quand même ?")) return;
+  try { await api("/api/quit"); } catch {}
+  document.body.innerHTML = '<main><section><h2>Suivi Pix est fermé.</h2><p class="hint">Vous pouvez fermer cet onglet.</p></section></main>';
+};
+setInterval(() => api("/api/ping").catch(() => {}), 15000);
+// Onglet fermé : l'app s'arrête d'elle-même (sauf si la page est rechargée)
+window.addEventListener("pagehide", () => { try { navigator.sendBeacon("/api/bye?t=" + encodeURIComponent(TOKEN), new Blob(["{}"], { type: "text/plain" })); } catch {} });
+
+(async () => {
+  try {
+    const s = await api("/api/settings/load");
+    for (const k of ["selected", "targets", "domain", "mapping", "knownComps"]) if (s[k]) settings[k] = s[k];
+    if (s.lastResults && s.lastResults.rows) results = { failures: [], ...s.lastResults };
+  } catch {}
+  $("domain").value = settings.domain;
+  renderResults();
+})();
+</script>
+</body>
+</html>
