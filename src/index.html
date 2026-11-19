@@ -396,8 +396,9 @@ $("template").onclick = () => downloadBlob("eleves-pix-modele.csv", new Blob(["�
 /* ---------- Vérification ---------- */
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 $("run").onclick = () => { if (!running) openDialog("run"); };
+let lastNetErr = "", serverDown = false;
 async function runCheck() {
-  running = true; stopRequested = false;
+  running = true; stopRequested = false; serverDown = false;
   $("run").disabled = true; $("stop").hidden = false; $("export").disabled = true;
   results = { date: new Date().toISOString(), domain: settings.domain, rows: [], failures: invalid.map(x => ({ ...x })) };
   renderResults();
@@ -407,9 +408,20 @@ async function runCheck() {
     const s = list[i];
     $("progressText").textContent = `${i + 1} / ${list.length} · ${s.name}`;
     $("bar").style.width = (i / list.length * 100) + "%";
-    let res;
-    try { res = await api("/api/check", { domain: settings.domain, login: s.login, password: s.password }); }
-    catch (e) { res = { ok: false, error: "L'app ne répond plus (" + e.message + ")." }; }
+    let res = null;
+    for (let attempt = 0; attempt < 3 && !res; attempt++) {
+      try { res = await api("/api/check", { domain: settings.domain, login: s.login, password: s.password }); }
+      catch (e) {
+        lastNetErr = e.message;
+        if (attempt < 2) await sleep(3000);
+      }
+    }
+    if (!res) {
+      // Le serveur local ne répond plus : ce n'est pas la faute de l'élève, on s'arrête.
+      api("/api/log", { msg: "serveur injoignable pendant la vérification : " + lastNetErr }).catch(() => {});
+      serverDown = true;
+      break;
+    }
     if (res.ok) {
       const row = { name: s.name, login: s.login, pixScore: res.pixScore, levels: {} };
       for (const c of res.scorecards) row.levels[c.index] = { level: c.level, earnedPix: c.earnedPix, status: c.status, remainingPix: c.remainingPix };
@@ -423,7 +435,9 @@ async function runCheck() {
   }
   $("bar").style.width = "100%";
   const nf = results.failures.length;
-  $("progressText").textContent = (stopRequested ? "Arrêté · " : "Terminé · ") + `${results.rows.length} vérifié${results.rows.length > 1 ? "s" : ""}` + (nf ? ` · ${nf} connexion${nf > 1 ? "s" : ""} impossible${nf > 1 ? "s" : ""}` : "");
+  if (serverDown) $("progressText").innerHTML = `<span style="color:var(--err)">Interrompu : Suivi Pix ne répond plus (${esc(lastNetErr)}). Relancez l'app, rechargez le fichier et recommencez.</span> · `;
+  else $("progressText").textContent = "";
+  $("progressText").insertAdjacentText("beforeend", (serverDown ? "" : stopRequested ? "Arrêté · " : "Terminé · ") + `${results.rows.length} vérifié${results.rows.length > 1 ? "s" : ""}` + (nf ? ` · ${nf} connexion${nf > 1 ? "s" : ""} impossible${nf > 1 ? "s" : ""}` : "");
   running = false; $("stop").hidden = true;
   $("run").disabled = !(students.length || invalid.length);
   save(); renderResults();

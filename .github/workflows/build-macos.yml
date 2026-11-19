@@ -53,6 +53,27 @@ jobs:
           echo "vérification (mode test) OK"
           curl -fsS -X POST -H "X-Suivi-Token: $TOKEN" -d '{}' http://127.0.0.1:8765/api/quit
 
+      - name: Diagnostic — vraie connexion à Pix (faux compte)
+        run: |
+          APP="dist/Suivi Pix.app"
+          SUIVI_PIX_NO_BROWSER=1 SUIVI_PIX_PORT=8766 "$APP/Contents/MacOS/Suivi Pix" &
+          PID=$!
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8766/ -o page.html && break; sleep 1; done
+          TOKEN=$(grep -o 'const TOKEN = "[^"]*"' page.html | cut -d'"' -f2)
+          for d in app.pix.fr app.pix.org; do
+            echo "--- $d"
+            /usr/bin/time -p curl -sS -m 120 -X POST -H "X-Suivi-Token: $TOKEN" -H "Content-Type: application/json" \
+              -d "{\"domain\":\"$d\",\"login\":\"suivi-pix-diagnostic@example.invalid\",\"password\":\"pas-un-vrai-mot-de-passe\"}" \
+              http://127.0.0.1:8766/api/check || echo "ECHEC requete locale"
+            echo
+            kill -0 $PID && echo "app toujours en vie" || echo "APP ARRETEE"
+          done
+          echo "--- direct curl vers Pix"
+          curl -sS -m 30 -o /dev/null -w "%{http_code} en %{time_total}s\n" -X POST https://app.pix.fr/api/token \
+            -H "Content-Type: application/x-www-form-urlencoded" --data "grant_type=password&username=suivi-pix-diagnostic%40example.invalid&password=x"
+          cat ~/Library/Logs/Suivi\ Pix.log 2>/dev/null | tail -30 || true
+          kill $PID 2>/dev/null || true
+
       - name: Préparer le .zip
         run: |
           mkdir -p "pack/Suivi Pix"

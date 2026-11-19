@@ -21,7 +21,7 @@ import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 # Dans l'app construite (PyInstaller), les fichiers sont dans sys._MEIPASS
 HERE = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
 if sys.platform == "darwin":
@@ -29,12 +29,28 @@ if sys.platform == "darwin":
 else:
     SUPPORT_DIR = os.path.expanduser("~/.suivi-pix")
 SETTINGS_FILE = os.path.join(SUPPORT_DIR, "reglages.json")
+if sys.platform == "darwin":
+    LOG_FILE = os.path.expanduser("~/Library/Logs/Suivi Pix.log")
+else:
+    LOG_FILE = os.path.join(SUPPORT_DIR, "suivi-pix.log")
+
+
+def log(msg):
+    """Journal de diagnostic (jamais d'identifiant ni de mot de passe)."""
+    try:
+        os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+        if os.path.exists(LOG_FILE) and os.path.getsize(LOG_FILE) > 2_000_000:
+            os.replace(LOG_FILE, LOG_FILE + ".old")
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + msg + "\n")
+    except Exception:
+        pass
 
 SESSION_TOKEN = secrets.token_urlsafe(24)
 ALLOWED_DOMAINS = ("app.pix.fr", "app.pix.org")
 USER_AGENT = "SuiviPix/1.0 (macOS; suivi enseignant)"
 MOCK = os.environ.get("SUIVI_PIX_MOCK") == "1"
-HEARTBEAT_TIMEOUT = 240  # secondes sans signe de vie de la page -> arret
+HEARTBEAT_TIMEOUT = 3 * 3600  # secondes sans aucune activite de la page -> arret
 
 _last_ping = time.time()
 _bye_at = None  # la page a ete fermee : arret prevu sauf si elle revient
@@ -51,7 +67,7 @@ class PixError(Exception):
 def _http_urllib(method, url, headers, body):
     req = urllib.request.Request(url, data=body, method=method, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=20) as resp:
             return resp.status, resp.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
         return e.code, e.read().decode("utf-8", "replace")
@@ -66,7 +82,7 @@ def _http_curl(method, url, headers, body):
     # n'apparait dans la liste des processus.
     lines = [
         "silent", "show-error",
-        "max-time = 30",
+        "max-time = 20",
         "request = " + _curl_quote(method),
         "url = " + _curl_quote(url),
         'write-out = "\\n%{http_code}"',
@@ -76,7 +92,7 @@ def _http_curl(method, url, headers, body):
     if body is not None:
         lines.append("data-binary = " + _curl_quote(body.decode("utf-8")))
     proc = subprocess.run(["curl", "-K", "-"], input="\n".join(lines).encode("utf-8"),
-                          capture_output=True, timeout=40)
+                          capture_output=True, timeout=30)
     if proc.returncode != 0:
         raise PixError("Connexion impossible : " + proc.stderr.decode("utf-8", "replace").strip())
     out = proc.stdout.decode("utf-8", "replace")
@@ -92,12 +108,16 @@ def http_request(method, url, headers, body=None):
         return _http_urllib(method, url, headers, body)
     except urllib.error.URLError as e:
         if isinstance(e.reason, ssl.SSLError) and shutil.which("curl"):
+            log("certificats Python indisponibles, passage par curl (%s)" % e.reason)
             return _http_curl(method, url, headers, body)
         raise PixError("Connexion impossible à Pix (%s). Vérifiez la connexion Internet." % e.reason)
-    except ssl.SSLError:
+    except ssl.SSLError as e:
         if shutil.which("curl"):
+            log("erreur SSL, passage par curl (%s)" % e)
             return _http_curl(method, url, headers, body)
         raise
+    except (TimeoutError, OSError) as e:
+        raise PixError("Pix ne répond pas (%s). Réessayer plus tard." % e)
 
 
 def _error_message(status, text):
@@ -154,13 +174,15 @@ def pix_check(domain, login, password):
             raise PixError(_error_message(status, text))
         return parse_profile(json.loads(text))
     finally:
-        if refresh:  # on referme la session ouverte (au mieux)
-            try:
-                http_request("POST", base + "/revoke", {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                }, urllib.parse.urlencode({"token": refresh, "token_type_hint": "refresh_token"}).encode())
-            except Exception:
-                pass
+        if refresh:  # on referme la session ouverte, en arriere-plan (ne retarde pas la reponse)
+            def _revoke():
+                try:
+                    http_request("POST", base + "/revoke", {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    }, urllib.parse.urlencode({"token": refresh, "token_type_hint": "refresh_token"}).encode())
+                except Exception:
+                    pass
+            threading.Thread(target=_revoke, daemon=True).start()
 
 
 def parse_profile(doc):
@@ -462,12 +484,17 @@ class Handler(BaseHTTPRequestHandler):
             save_settings(data)
             return self._send(200, {"ok": True})
         if path == "/api/check":
+            t0 = time.time()
             try:
                 res = pix_check(data.get("domain", ""), (data.get("login") or "").strip(), data.get("password") or "")
+                log("verification ok (%.1f s)" % (time.time() - t0))
                 return self._send(200, {"ok": True, **res})
             except PixError as e:
+                log("verification refusee (%.1f s) : %s" % (time.time() - t0, e))
                 return self._send(200, {"ok": False, "error": str(e)})
             except Exception as e:  # erreur imprevue
+                import traceback
+                log("ERREUR inattendue :\n" + traceback.format_exc())
                 return self._send(200, {"ok": False, "error": "Erreur inattendue : %s" % e})
         if path == "/api/xlsx/read":
             try:
@@ -480,7 +507,11 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/xlsx/write":
             content = write_xlsx(data.get("sheets") or [])
             return self._send(200, {"ok": True, "b64": base64.b64encode(content).decode("ascii")})
+        if path == "/api/log":
+            log("page : " + str(data.get("msg", ""))[:500])
+            return self._send(200, {"ok": True})
         if path == "/api/quit":
+            log("arret : bouton Quitter")
             self._send(200, {"ok": True})
             threading.Thread(target=_server.shutdown, daemon=True).start()
             return
@@ -488,20 +519,30 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def _watchdog():
-    # Arret si la page est fermee (signal "bye" sans retour dans les 10 s)
+    # Arret si la page est fermee (signal "bye" sans aucune requete dans les 30 s)
     # ou si plus aucun signe de vie depuis HEARTBEAT_TIMEOUT.
     while True:
         time.sleep(2)
         now = time.time()
-        if (_bye_at and now - _bye_at > 10) or now - _last_ping > HEARTBEAT_TIMEOUT:
+        if (_bye_at and now - _bye_at > 30) or now - _last_ping > HEARTBEAT_TIMEOUT:
+            log("arret : %s" % ("page fermee" if _bye_at else "inactivite"))
             _server.shutdown()
             return
+
+
+class QuietServer(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        # Pas de console dans l'app : on journalise au lieu d'ecrire sur stderr
+        import traceback
+        log("ERREUR serveur :\n" + traceback.format_exc())
 
 
 def main():
     global _server
     port = int(os.environ.get("SUIVI_PIX_PORT", "0"))
-    _server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    _server = QuietServer(("127.0.0.1", port), Handler)
     url = "http://127.0.0.1:%d/" % _server.server_address[1]
     try:
         print(url, flush=True)
@@ -510,7 +551,14 @@ def main():
     threading.Thread(target=_watchdog, daemon=True).start()
     if os.environ.get("SUIVI_PIX_NO_BROWSER") != "1":
         threading.Timer(0.3, lambda: webbrowser.open(url)).start()
-    _server.serve_forever()
+    log("demarrage v%s (%s, Python %s)" % (VERSION, sys.platform, sys.version.split()[0]))
+    try:
+        _server.serve_forever()
+    except BaseException:
+        import traceback
+        log("ARRET BRUTAL :\n" + traceback.format_exc())
+        raise
+    log("arret normal")
 
 
 if __name__ == "__main__":
