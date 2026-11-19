@@ -140,7 +140,7 @@
     <h2 id="dlgTitle">Quelles compétences observer ?</h2>
     <p class="hint" style="margin:0 0 8px">Cochez les compétences Pix à afficher. Le niveau visé est facultatif : il colore les cases (vert = atteint). Le total additionne les niveaux des compétences cochées.</p>
     <div class="row" style="margin-bottom:6px">
-      <button id="all">Tout cocher</button><button id="none">Tout décocher</button>
+      <button id="defaults">Mes 3 compétences (3.1 · 4.3 · 5.1)</button><button id="all">Tout cocher</button><button id="none">Tout décocher</button>
       <span class="muted" style="font-size:13px">Niveau visé pour les cochées :</span>
       <select id="targetAll"></select>
     </div>
@@ -164,7 +164,10 @@ const AREAS = [
 const MAX_LEVEL = 8;
 const idxKey = (i) => String(i).split(".").map(n => n.padStart(3, "0")).join(".");
 
-let settings = { selected: ["1.1","3.1","4.1"], targets: {}, domain: "app.pix.fr", mapping: {}, knownComps: {} };
+// Compétences contrôlées par défaut : 3.1 textes, 4.3 santé/bien-être/environnement, 5.1 problèmes techniques
+const DEFAULT_SELECTED = ["3.1", "4.3", "5.1"];
+const DEFAULTS_VERSION = 2;
+let settings = { selected: [...DEFAULT_SELECTED], targets: {}, domain: "app.pix.fr", mapping: {}, knownComps: {}, defaultsVersion: DEFAULTS_VERSION };
 let sheet = null;            // {headers:[], rows:[[]]}  (mémoire uniquement)
 let students = [];           // {name, login, password}
 let invalid = [];            // lignes sans identifiant ou mot de passe
@@ -245,6 +248,7 @@ $("comps").addEventListener("change", (e) => {
     if (t.value) draft.targets[t.dataset.target] = Number(t.value); else delete draft.targets[t.dataset.target];
   }
 });
+$("defaults").onclick = () => { draft.selected = [...DEFAULT_SELECTED]; renderComps(); };
 $("all").onclick = () => { draft.selected = compList().map(c => c.index); renderComps(); };
 $("none").onclick = () => { draft.selected = []; renderComps(); };
 $("targetAll").onchange = (e) => {
@@ -562,6 +566,8 @@ window.addEventListener("pagehide", () => { try { navigator.sendBeacon("/api/bye
   try {
     const s = await api("/api/settings/load");
     for (const k of ["selected", "targets", "domain", "mapping", "knownComps"]) if (s[k]) settings[k] = s[k];
+    // Mise à jour : on passe une fois aux 3 compétences par défaut
+    if (s.defaultsVersion !== DEFAULTS_VERSION) { settings.selected = [...DEFAULT_SELECTED]; settings.defaultsVersion = DEFAULTS_VERSION; save(); }
     if (s.lastResults && s.lastResults.rows) results = { failures: [], ...s.lastResults };
   } catch {}
   $("domain").value = settings.domain;

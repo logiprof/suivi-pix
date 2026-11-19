@@ -15,8 +15,10 @@ SUIVI PIX — mode d'emploi
      seule les colonnes Nom / Identifiant / Mot de passe ; vérifiez l'aperçu et
      corrigez le choix des colonnes si besoin (il est retenu pour la prochaine fois).
      Si un élève a répondu deux fois au formulaire, sa dernière réponse est gardée.
-   - « Vérifier les niveaux… » : choisissez les compétences à observer (et un
-     niveau visé si vous voulez), puis lancez.
+   - « Vérifier les niveaux… » : les 3 compétences suivies sont cochées d'office
+     (3.1 Développer des documents textuels, 4.3 Protéger la santé, le bien-être
+     et l'environnement, 5.1 Résoudre des problèmes techniques). Vous pouvez en
+     changer, ajouter un niveau visé, puis lancer.
    - Tableau : niveau et Pix de chaque élève par compétence, plus le TOTAL des
      niveaux des compétences choisies. Une compétence pas commencée compte 0.
      Cliquez sur un titre de colonne pour trier. « changer » permet d'afficher

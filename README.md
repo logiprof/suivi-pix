@@ -17,7 +17,7 @@ L'app fonctionne sur Mac Intel et Apple Silicon (macOS 11 ou plus récent) et n'
 
 1. L'app s'ouvre dans le navigateur (adresse `127.0.0.1`, elle tourne uniquement sur le Mac).
 2. Déposer l'export Excel de Forms (ou un CSV `nom;identifiant;mot de passe`). Les colonnes sont repérées automatiquement et peuvent être corrigées.
-3. **Vérifier les niveaux…** → cocher les compétences à observer (niveau visé facultatif) → lancer.
+3. **Vérifier les niveaux…** → les compétences **3.1**, **4.3** et **5.1** sont cochées par défaut (modifiable, niveau visé facultatif) → lancer.
 4. Résultats : niveau et Pix par compétence, **total des niveaux**, moyennes, liste séparée des **connexions impossibles**, **export Excel** (3 onglets).
 
 Fermer l'onglet (ou cliquer sur *Quitter*) arrête l'app.
