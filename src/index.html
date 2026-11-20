@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suivi Pix</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --card: #fff; --ink: #1d1d1f; --muted: #6e6e73; --line: #e3e1dc;
+    --accent: #3d4fd6; --ok: #2f8f5b; --ok-bg: #e3f4ea; --mid: #b26a00; --mid-bg: #fdf0d9;
+    --low: #8a8a8e; --low-bg: #f0efec; --err: #c0392b; --err-bg: #fbe7e4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161618; --card:#202023; --ink:#f2f2f4; --muted:#9a9aa0; --line:#35353a;
+      --accent:#8b97ff; --ok:#6fd39b; --ok-bg:#1d3a2a; --mid:#f0b45a; --mid-bg:#3d2f17;
+      --low:#9a9aa0; --low-bg:#2a2a2e; --err:#ff8a7a; --err-bg:#43211d; }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; font:15px/1.45 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; background:var(--bg); color:var(--ink); }
+  header { display:flex; align-items:center; justify-content:space-between; padding:16px 28px; border-bottom:1px solid var(--line); background:var(--card); position:sticky; top:0; z-index:5; }
+  header h1 { margin:0; font-size:20px; letter-spacing:-.01em; }
+  header h1 span { color:var(--muted); font-weight:400; font-size:14px; margin-left:8px; }
+  main { max-width:1200px; margin:0 auto; padding:24px 28px 60px; display:grid; gap:20px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px 22px; }
+  h2 { margin:0 0 4px; font-size:16px; display:flex; align-items:center; gap:8px; }
+  .hint { color:var(--muted); font-size:13px; margin:0 0 14px; }
+  button { font:inherit; border-radius:9px; border:1px solid var(--line); background:var(--card); color:var(--ink); padding:7px 14px; cursor:pointer; }
+  button:hover { border-color:var(--muted); }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  button.link { border:none; background:none; color:var(--accent); padding:0; text-decoration:underline; }
+  button:disabled { opacity:.45; cursor:default; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .drop { border:1.5px dashed var(--line); border-radius:12px; padding:18px; text-align:center; color:var(--muted); cursor:pointer; }
+  .drop.over { border-color:var(--accent); color:var(--accent); }
+  .pill { display:inline-block; padding:2px 10px; border-radius:99px; background:var(--low-bg); font-size:13px; }
+  .pill.err { background:var(--err-bg); color:var(--err); }
+  .mapping { display:grid; grid-template-columns:repeat(auto-fill, minmax(250px,1fr)); gap:10px 18px; margin-top:14px; }
+  .mapping label { display:grid; gap:3px; font-size:13px; color:var(--muted); }
+  .mapping select { width:100%; }
+  select { font:inherit; padding:4px 6px; border-radius:7px; border:1px solid var(--line); background:var(--card); color:var(--ink); max-width:100%; }
+  .comp-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(330px,1fr)); gap:4px 22px; }
+  .area { grid-column:1/-1; margin:12px 0 2px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:600; }
+  .comp { display:flex; align-items:center; gap:8px; padding:4px 0; }
+  .comp label { flex:1; display:flex; gap:8px; align-items:center; cursor:pointer; }
+  .comp .idx { font-variant-numeric:tabular-nums; color:var(--muted); width:26px; }
+  .progress { height:6px; background:var(--low-bg); border-radius:99px; overflow:hidden; flex:1; min-width:120px; }
+  .progress div { height:100%; width:0; background:var(--accent); transition:width .2s; }
+  .table-wrap { overflow:auto; margin-top:14px; border:1px solid var(--line); border-radius:10px; max-height:70vh; }
+  table { border-collapse:collapse; width:100%; font-size:14px; }
+  th, td { padding:7px 10px; border-bottom:1px solid var(--line); text-align:center; white-space:nowrap; }
+  th { position:sticky; top:0; background:var(--card); font-size:12px; color:var(--muted); font-weight:600; z-index:1; }
+  th[data-sort] { cursor:pointer; user-select:none; }
+  th.name, td.name { text-align:left; position:sticky; left:0; background:var(--card); }
+  th.name { z-index:3; }
+  td.left { text-align:left; }
+  td.lvl { font-weight:600; font-variant-numeric:tabular-nums; line-height:1.2; }
+  td.lvl small { display:block; font-weight:400; font-size:11px; color:var(--muted); }
+  td.ok { background:var(--ok-bg); color:var(--ok); }
+  td.mid { background:var(--mid-bg); color:var(--mid); }
+  td.low { color:var(--low); }
+  td.total { font-weight:700; border-left:2px solid var(--line); }
+  th.total { border-left:2px solid var(--line); }
+  td.err { color:var(--err); text-align:left; white-space:normal; }
+  tr.summary td { font-weight:600; background:var(--low-bg); }
+  .legend { display:flex; gap:14px; font-size:13px; color:var(--muted); margin-top:10px; flex-wrap:wrap; }
+  .legend i { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-1px; margin-right:5px; }
+  .muted { color:var(--muted); }
+  .preview { margin-top:12px; font-size:13px; }
+  .preview td, .preview th { padding:4px 8px; text-align:left; }
+  dialog { border:none; border-radius:16px; padding:0; width:min(980px, 94vw); max-height:90vh; background:var(--card); color:var(--ink); box-shadow:0 20px 60px rgba(0,0,0,.25); }
+  dialog::backdrop { background:rgba(20,20,30,.35); }
+  .dlg-head { padding:18px 22px 6px; }
+  .dlg-body { padding:0 22px; overflow:auto; max-height:calc(90vh - 150px); }
+  .dlg-foot { padding:14px 22px; border-top:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  #errSection { border-color:var(--err-bg); }
+  .tabs { display:flex; gap:4px; background:var(--low-bg); padding:3px; border-radius:10px; }
+  .tab { border:none; background:none; padding:6px 14px; border-radius:8px; font-weight:600; color:var(--muted); }
+  .tab.active { background:var(--card); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  #gradingView { max-width:1400px; }
+  #gTable td, #gTable th { padding:6px 8px; }
+  #gTable td.grade { font-size:17px; font-weight:800; font-variant-numeric:tabular-nums; border-left:2px solid var(--line); }
+  #gTable td.grade.insuf { color:var(--err); } #gTable td.grade.suf { color:var(--ok); }
+  #gTable th.pencol { max-width:86px; white-space:normal; line-height:1.15; }
+  #gTable input[type=checkbox] { width:16px; height:16px; cursor:pointer; }
+  #gTable input.extra { width:48px; font:inherit; padding:2px 4px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--ink); text-align:center; }
+  .tag { display:inline-block; font-size:11px; padding:1px 7px; border-radius:99px; background:var(--low-bg); color:var(--muted); margin-left:6px; font-weight:600; vertical-align:1px; }
+  .tag.man { background:var(--mid-bg); color:var(--mid); } .tag.nr { background:var(--err-bg); color:var(--err); }
+  .form-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:10px 18px; }
+  .form-grid label, .fld { display:grid; gap:4px; font-size:13px; color:var(--muted); }
+  .form-grid input, .form-grid select, .fld input, .fld textarea, .fld select { font:inherit; font-size:14px; color:var(--ink); padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:var(--card); }
+  .fld textarea { min-height:64px; resize:vertical; }
+  .form-grid input, .form-grid select, .fld input, .fld textarea, .fld select { width:100%; min-width:0; box-sizing:border-box; }
+  .form-grid label { align-content:end; }
+  .box { border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:var(--bg); margin-top:14px; }
+  .box h3 { margin:0 0 8px; font-size:14px; }
+  .pen-line { display:flex; align-items:center; gap:10px; padding:3px 0; font-size:14px; }
+  .pen-line .pts { margin-left:auto; color:var(--err); font-weight:600; }
+  .preview-note { display:flex; gap:18px; align-items:center; font-size:14px; flex-wrap:wrap; }
+  .preview-note b.big { font-size:26px; }
+  .bt-row { display:grid; grid-template-columns:1fr 90px 34px; gap:8px; align-items:center; margin-bottom:6px; }
+  .bt-row input { font:inherit; padding:5px 8px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink); }
+  td.bad { background:var(--err-bg); color:var(--err); }
+  td.pen { color:var(--err); font-weight:700; }
+  td.bilan { text-align:left; white-space:normal; min-width:210px; font-size:13px; }
+  td.bilan.ok { color:var(--ok); background:none; font-weight:600; }
+  td.bilan.ko { color:var(--mid); }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .chip { padding:3px 11px; border-radius:99px; font-size:13px; background:var(--low-bg); }
+  .chip.ok { background:var(--ok-bg); color:var(--ok); } .chip.bad { background:var(--err-bg); color:var(--err); } .chip.mid { background:var(--mid-bg); color:var(--mid); }
+  #exportTable td { text-align:left; } #exportTable td.num { text-align:center; font-weight:700; font-variant-numeric:tabular-nums; }
+  #exportTable td.act { text-align:right; white-space:nowrap; } #exportTable td.act button { padding:4px 11px; font-size:13px; margin-left:6px; }
+  .rules { margin:18px 0 6px; padding:14px 16px; border:1px solid var(--line); border-radius:12px; background:var(--bg); }
+  .rules h3 { margin:0 0 10px; font-size:14px; }
+  .rules-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:10px 22px; font-size:14px; }
+  .rules-grid label { display:flex; align-items:center; gap:8px; justify-content:space-between; }
+  .rules-grid label.wide { grid-column:1/-1; justify-content:flex-start; }
+  .rules input[type=number] { width:62px; font:inherit; padding:3px 6px; border-radius:7px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+  td.status-cred { color:var(--err); font-weight:600; white-space:normal; text-align:left; }
+  td.status-other { color:var(--mid); font-weight:600; white-space:normal; text-align:left; }
+</style>
+</head>
+<body>
+<header>
+  <div class="row" style="gap:18px">
+    <h1>Suivi Pix <span>v__VERSION__</span></h1>
+    <nav class="tabs"><button id="tabAnalyse" class="tab active">1. Analyse</button><button id="tabNotes" class="tab">2. Notation</button></nav>
+  </div>
+  <div class="row">
+    <select id="domain" title="Plateforme Pix">
+      <option value="app.pix.fr">app.pix.fr</option>
+      <option value="app.pix.org">app.pix.org</option>
+    </select>
+    <button id="quit">Quitter</button>
+  </div>
+</header>
+
+<main id="analyseView">
+  <section>
+    <h2>1. Fichier des élèves</h2>
+    <p class="hint">Déposez l'export Excel de Microsoft Forms (.xlsx) ou un fichier CSV. Les mots de passe restent en mémoire pendant que l'app est ouverte, ils ne sont jamais enregistrés.</p>
+    <div id="drop" class="drop">Glisser le fichier Excel ou CSV ici, ou <u>cliquer pour le choisir</u></div>
+    <input id="file" type="file" accept=".xlsx,.csv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden>
+    <div id="mappingBox" hidden>
+      <div class="mapping">
+        <label>Nom de l'élève<select id="mapName"></select></label>
+        <label>Prénom (facultatif)<select id="mapFirst"></select></label>
+        <label>Identifiant Pix (e-mail ou identifiant)<select id="mapLogin"></select></label>
+        <label>Mot de passe Pix<select id="mapPassword"></select></label>
+        <label>Classe (facultatif)<select id="mapClass"></select></label>
+        <label>Date d'envoi (facultatif)<select id="mapDate"></select></label>
+      </div>
+      <div id="preview" class="preview"></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <span id="studentsInfo" class="pill">Aucun fichier chargé</span>
+      <button id="template" class="link">Télécharger un modèle CSV</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. Résultats</h2>
+    <div class="row">
+      <button id="run" class="primary" disabled>Vérifier les niveaux…</button>
+      <button id="stop" hidden>Arrêter</button>
+      <div class="progress"><div id="bar"></div></div>
+      <span id="progressText" class="muted" style="font-size:13px"></span>
+      <label id="classFilterBox" class="muted" style="font-size:13px" hidden>Classe <select id="classFilter"></select></label>
+      <button id="export" disabled>Tout exporter (Excel)</button>
+    </div>
+    <p id="lastRun" class="hint" style="margin:10px 0 0"></p>
+    <p id="goGradeBox" hidden style="margin:12px 0 0"><button id="goGrade" class="primary">Passer à la notation →</button>
+      <span class="hint" style="margin-left:8px">pénalités manuelles, notes et fiches PDF</span></p>
+    <div id="results"></div>
+    <div id="legend" class="legend" hidden></div>
+    <div id="exportPanel" hidden>
+      <h3 style="margin:22px 0 4px;font-size:15px">Exporter les listes</h3>
+      <p class="hint" style="margin:0 0 8px">Chaque liste en fichier Excel séparé, ou copiée pour la coller dans un e-mail ou un tableur. « Tout exporter » réunit toutes les listes dans un seul classeur (un onglet par liste).</p>
+      <div class="table-wrap" style="max-height:none;margin-top:0"><table id="exportTable"></table></div>
+    </div>
+  </section>
+
+  <section id="errSection" hidden>
+    <h2>Inévaluables et à revérifier <span id="errCount" class="pill err"></span></h2>
+    <p class="hint"><b>Inévaluable</b> : identifiant ou mot de passe incorrect (ou absent du formulaire). Selon les consignes, le travail ne peut pas être évalué et n'est pas considéré comme remis.
+      <b>À revérifier</b> : problème technique ou côté Pix, sans lien avec les identifiants ; relancer plus tard.</p>
+    <div class="row"><button id="copyErr">Copier la liste</button></div>
+    <div id="errors"></div>
+  </section>
+</main>
+
+<main id="gradingView" hidden>
+  <section>
+    <h2>Notation</h2>
+    <p class="hint" id="gIntro"></p>
+    <div class="row">
+      <label id="gClassBox" class="muted" style="font-size:13px" hidden>Classe <select id="gClass"></select></label>
+      <button id="gAdd">+ Ajouter un élève</button>
+      <button id="gSync" title="Reprend les niveaux de la dernière analyse (les pénalités manuelles et remarques sont gardées)">Mettre à jour depuis l'analyse</button>
+      <button id="gBareme">Barème et pénalités…</button>
+      <span style="flex:1"></span>
+      <button id="gExcel">Notes (Excel)</button>
+      <button id="gPdfAll" class="primary">PDF : tous les élèves</button>
+      <button id="gPdfZip">PDF : un fichier par élève (.zip)</button>
+    </div>
+    <div id="gChips" class="chips"></div>
+    <div id="gTable"></div>
+    <p class="hint" style="margin-top:10px">Cochez les pénalités directement dans le tableau. Cliquez sur ✎ pour le détail d'un élève : niveaux, autre pénalité, remarque, identifiants corrigés.</p>
+  </section>
+</main>
+
+<dialog id="studentDialog">
+  <div class="dlg-head"><h2 id="sdTitle">Élève</h2><p class="hint" id="sdSub" style="margin:0 0 4px"></p></div>
+  <div class="dlg-body">
+    <div class="form-grid">
+      <label>Nom et prénom<input id="sdName"></label>
+      <label>Classe<input id="sdClass"></label>
+      <label>Date d'envoi des accès<input id="sdDate" placeholder="ex. 19.11.2026 10:15"></label>
+      <label>Statut<select id="sdStatus"><option value="evalue">Évalué</option><option value="non_remis">Non remis (inévaluable)</option><option value="a_completer">À compléter</option></select></label>
+    </div>
+    <div class="box">
+      <h3>Niveaux Pix</h3>
+      <p class="hint" id="sdSource" style="margin:0 0 8px"></p>
+      <div class="form-grid" id="sdLevels"></div>
+      <div class="row" style="margin-top:10px;align-items:flex-end">
+        <label class="fld" style="flex:1;min-width:180px">Identifiant Pix<input id="sdLogin" autocomplete="off"></label>
+        <label class="fld" style="flex:1;min-width:160px">Mot de passe Pix<input id="sdPassword" type="password" autocomplete="new-password"></label>
+        <button id="sdCheck">Vérifier sur Pix</button>
+      </div>
+      <p class="hint" id="sdCheckMsg" style="margin:6px 0 0"></p>
+    </div>
+    <div class="box">
+      <h3>Pénalités</h3>
+      <div id="sdPens"></div>
+      <div class="row" style="margin-top:6px">
+        <label class="fld" style="flex:1">Autre pénalité (motif)<input id="sdExtraLabel" placeholder="ex. consigne non respectée"></label>
+        <label class="fld" style="width:110px">Points<input id="sdExtraPts" type="number" min="0" step="0.5"></label>
+      </div>
+    </div>
+    <div class="box"><label class="fld">Remarque (imprimée sur la fiche PDF)<textarea id="sdRemark"></textarea></label></div>
+    <div class="box"><div class="preview-note" id="sdPreview"></div></div>
+  </div>
+  <div class="dlg-foot">
+    <div class="row"><button id="sdDelete" style="color:var(--err)">Retirer l'élève</button><button id="sdPdf">Fiche PDF</button></div>
+    <div class="row"><button id="sdCancel">Annuler</button><button id="sdSave" class="primary">Enregistrer</button></div>
+  </div>
+</dialog>
+
+<dialog id="baremeDialog">
+  <div class="dlg-head"><h2>Barème et pénalités</h2><p class="hint" style="margin:0 0 4px">Note = points × 5 / points maximum + 1, entre 1 et 6 (comme LogiExam).</p></div>
+  <div class="dlg-body">
+    <div class="form-grid">
+      <label>Cours (sur les fiches)<input id="bTitle"></label>
+      <label>Pied de page : formation et branche<input id="bFooterLeft"></label>
+      <label>Pied de page : enseignant<input id="bFooterRight"></label>
+      <label>Points maximum (= note 6)<input id="bMax" type="number" min="1" step="1"></label>
+      <label>Arrondi de la note<select id="bRound"><option value="half">au demi-point (comme LogiExam)</option><option value="tenth">au dixième</option><option value="hundredth">au centième</option></select></label>
+      <label>Note d'un travail non remis<input id="bNonRemis" type="number" min="1" max="6" step="0.5" placeholder="vide = pas de note"></label>
+    </div>
+    <div class="box">
+      <h3>Description des compétences travaillées (sur les fiches)</h3>
+      <div id="bDescs"></div>
+    </div>
+    <div class="box">
+      <h3>Pénalités manuelles</h3>
+      <div id="bTypes"></div>
+      <button id="bAddType" class="link">+ Ajouter un type de pénalité</button>
+    </div>
+    <p class="hint" style="margin-top:12px">La pénalité automatique (niveau minimum non atteint) et le plafond par compétence se règlent dans « Vérifier les niveaux… » de l'onglet Analyse.</p>
+  </div>
+  <div class="dlg-foot"><span></span><div class="row"><button id="bCancel">Annuler</button><button id="bSave" class="primary">Enregistrer</button></div></div>
+</dialog>
+
+<dialog id="compDialog">
+  <div class="dlg-head">
+    <h2 id="dlgTitle">Quelles compétences contrôler ?</h2>
+    <p class="hint" style="margin:0 0 8px">Cochez les compétences à contrôler et vérifiez les règles d'évaluation en bas de la fenêtre.</p>
+    <div class="row" style="margin-bottom:6px">
+      <button id="defaults">Mes 3 compétences (3.1 · 4.3 · 5.1)</button><button id="all">Tout cocher</button><button id="none">Tout décocher</button>
+    </div>
+  </div>
+  <div class="dlg-body">
+    <div id="comps" class="comp-grid"></div>
+    <div class="rules">
+      <h3>Règles d'évaluation</h3>
+      <div class="rules-grid">
+        <label>Total des niveaux à atteindre <input type="number" id="rTotal" min="0" max="99" step="1"></label>
+        <label>Niveau minimum dans chaque compétence <input type="number" id="rMin" min="0" max="8" step="1"></label>
+        <label>Niveau maximum dans une compétence <input type="number" id="rMax" min="1" max="8" step="1"></label>
+        <label>Pénalité si le niveau minimum n'est pas atteint <span><input type="number" id="rPen" min="0" max="10" step="0.5"> pt</span></label>
+        <label class="wide">Appliquer la pénalité
+          <select id="rPenMode"><option value="each">pour chaque compétence sous le minimum</option><option value="once">une seule fois, même si plusieurs compétences</option></select></label>
+        <label class="wide"><input type="checkbox" id="rCap"> Dans le total, un niveau au-dessus du maximum ne compte que pour le maximum</label>
+      </div>
+      <p style="margin:10px 0 0"><button id="rReset" class="link">Revenir aux règles des consignes</button></p>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <span id="dlgCount" class="muted" style="font-size:13px"></span>
+    <div class="row"><button id="dlgCancel">Annuler</button><button id="dlgOk" class="primary">Lancer la vérification</button></div>
+  </div>
+</dialog>
+
+<script>
+const TOKEN = "__SESSION_TOKEN__";
+const AREAS = [
+  ["1", "Information et données", [["1.1","Mener une recherche et une veille d'information"],["1.2","Gérer des données"],["1.3","Traiter des données"]]],
+  ["2", "Communication et collaboration", [["2.1","Interagir"],["2.2","Partager et publier"],["2.3","Collaborer"],["2.4","S'insérer dans le monde numérique"]]],
+  ["3", "Création de contenu", [["3.1","Développer des documents textuels"],["3.2","Développer des documents multimédia"],["3.3","Adapter les documents à leur finalité"],["3.4","Programmer"]]],
+  ["4", "Protection et sécurité", [["4.1","Sécuriser l'environnement numérique"],["4.2","Protéger les données personnelles et la vie privée"],["4.3","Protéger la santé, le bien-être et l'environnement"]]],
+  ["5", "Environnement numérique", [["5.1","Résoudre des problèmes techniques"],["5.2","Construire un environnement numérique"]]],
+];
+const idxKey = (i) => String(i).split(".").map(n => n.padStart(3, "0")).join(".");
+
+// Compétences contrôlées par défaut : 3.1 textes, 4.3 santé/bien-être/environnement, 5.1 problèmes techniques
+const DEFAULT_SELECTED = ["3.1", "4.3", "5.1"];
+// Règles des consignes : total 11, niveau 2 minimum partout, niveau 6 maximum, −1 point si le niveau 2 n'est pas atteint
+const DEFAULT_RULES = { total: 11, min: 2, max: 6, penalty: 1, penaltyMode: "each", cap: true };
+const DEFAULTS_VERSION = 3;
+let settings = { selected: [...DEFAULT_SELECTED], rules: { ...DEFAULT_RULES }, domain: "app.pix.fr", mapping: {}, knownComps: {}, defaultsVersion: DEFAULTS_VERSION };
+let sheet = null;            // {headers:[], rows:[[]]}  (mémoire uniquement)
+let students = [];           // {name, login, password}
+let invalid = [];            // lignes sans identifiant ou mot de passe
+let results = null;          // {date, domain, rows:[...], failures:[...]}
+let running = false, stopRequested = false;
+let sortKey = "classe", sortDir = 1;
+let classFilter = "";   // "" = toutes les classes
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const norm = (s) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+
+async function api(path, body = {}) {
+  const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Suivi-Token": TOKEN }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+function save() { api("/api/settings/save", { ...settings, lastResults: results }).catch(() => {}); }
+
+/* ---------- Liste des compétences (complétée par ce que Pix renvoie) ---------- */
+function compList() {
+  const map = {};
+  for (const [code, area, list] of AREAS) for (const [i, n] of list) map[i] = { index: i, name: n, area, areaCode: code };
+  for (const [i, c] of Object.entries(settings.knownComps || {})) map[i] = { ...(map[i] || {}), index: i, name: c.name || map[i]?.name || i, area: c.area || map[i]?.area || "Autres", areaCode: i.split(".")[0] };
+  return Object.values(map).sort((a, b) => idxKey(a.index) < idxKey(b.index) ? -1 : 1);
+}
+const compName = (i) => (compList().find(c => c.index === i) || {}).name || i;
+function learnComps(cards) {
+  let changed = false;
+  for (const c of cards) {
+    if (!c.index || !c.name) continue;
+    const old = settings.knownComps[c.index];
+    if (!old || old.name !== c.name || (c.area && old.area !== c.area)) { settings.knownComps[c.index] = { name: c.name, area: c.area || (old && old.area) || "" }; changed = true; }
+  }
+  return changed;
+}
+
+/* ---------- Fenêtre de choix des compétences et des règles ---------- */
+let draft = null, dlgMode = "run";
+function renderComps() {
+  let h = "", lastArea = null;
+  for (const c of compList()) {
+    if (c.area !== lastArea) { h += `<div class="area">${esc(c.area)}</div>`; lastArea = c.area; }
+    const on = draft.selected.includes(c.index);
+    h += `<div class="comp"><label><input type="checkbox" data-idx="${esc(c.index)}"${on ? " checked" : ""}>
+      <span class="idx">${esc(c.index)}</span><span>${esc(c.name)}</span></label></div>`;
+  }
+  $("comps").innerHTML = h;
+  updateDlgCount();
+}
+function fillRules(r) {
+  $("rTotal").value = r.total; $("rMin").value = r.min; $("rMax").value = r.max;
+  $("rPen").value = r.penalty; $("rPenMode").value = r.penaltyMode; $("rCap").checked = !!r.cap;
+}
+function readRules() {
+  const num = (id, d) => { const v = Number($(id).value); return Number.isFinite(v) && $(id).value !== "" ? v : d; };
+  return { total: num("rTotal", DEFAULT_RULES.total), min: num("rMin", DEFAULT_RULES.min), max: num("rMax", DEFAULT_RULES.max),
+           penalty: num("rPen", DEFAULT_RULES.penalty), penaltyMode: $("rPenMode").value, cap: $("rCap").checked };
+}
+function updateDlgCount() {
+  const n = draft.selected.length;
+  $("dlgCount").textContent = n ? `${n} compétence${n > 1 ? "s" : ""} choisie${n > 1 ? "s" : ""}` : "Choisissez au moins une compétence";
+  $("dlgOk").disabled = !n;
+}
+function openDialog(mode) {
+  dlgMode = mode;
+  draft = { selected: [...settings.selected] };
+  $("dlgTitle").textContent = mode === "run" ? "Quelles compétences contrôler ?" : "Compétences et règles d'évaluation";
+  $("dlgOk").textContent = mode === "run" ? `Lancer la vérification (${students.length} élève${students.length > 1 ? "s" : ""})` : "Appliquer";
+  fillRules(settings.rules);
+  renderComps();
+  $("compDialog").showModal();
+}
+$("comps").addEventListener("change", (e) => {
+  const t = e.target;
+  if (t.dataset.idx) {
+    const s = new Set(draft.selected);
+    t.checked ? s.add(t.dataset.idx) : s.delete(t.dataset.idx);
+    draft.selected = compList().map(c => c.index).filter(k => s.has(k));
+    updateDlgCount();
+  }
+});
+$("defaults").onclick = () => { draft.selected = [...DEFAULT_SELECTED]; renderComps(); };
+$("all").onclick = () => { draft.selected = compList().map(c => c.index); renderComps(); };
+$("none").onclick = () => { draft.selected = []; renderComps(); };
+$("rReset").onclick = () => fillRules(DEFAULT_RULES);
+$("dlgCancel").onclick = () => $("compDialog").close();
+$("dlgOk").onclick = () => {
+  settings.selected = draft.selected; settings.rules = readRules();
+  $("compDialog").close(); save(); renderResults();
+  if (dlgMode === "run") runCheck();
+};
+$("domain").onchange = (e) => { settings.domain = e.target.value; save(); };
+
+/* ---------- Lecture du fichier (Excel ou CSV) ---------- */
+function decode(buf) {
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(buf); }
+  catch { return new TextDecoder("windows-1252").decode(buf); }
+}
+function parseCSV(text) {
+  text = text.replace(/^﻿/, "");
+  const first = text.split(/\r?\n/)[0] || "";
+  const delim = [";", "\t", ","].map(d => [d, first.split(d).length]).sort((a, b) => b[1] - a[1])[0][0];
+  const rows = []; let row = [], cell = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+    else if (c === '"') q = true;
+    else if (c === delim) { row.push(cell); cell = ""; }
+    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(cell); rows.push(row); row = []; cell = ""; }
+    else cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+function toB64(buf) {
+  const bytes = new Uint8Array(buf); let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+async function readFile(f) {
+  $("studentsInfo").className = "pill"; $("studentsInfo").textContent = "Lecture…";
+  const buf = await f.arrayBuffer();
+  let rows;
+  const isZip = new Uint8Array(buf.slice(0, 2)).join(",") === "80,75";
+  if (/\.xlsx$/i.test(f.name) || isZip) {
+    const r = await api("/api/xlsx/read", { b64: toB64(buf) });
+    if (!r.ok) { $("studentsInfo").className = "pill err"; $("studentsInfo").textContent = r.error; return; }
+    rows = r.rows;
+  } else if (/\.xls$/i.test(f.name)) {
+    $("studentsInfo").className = "pill err"; $("studentsInfo").textContent = "Ancien format .xls : enregistrez le fichier en .xlsx depuis Excel."; return;
+  } else {
+    rows = parseCSV(decode(buf));
+  }
+  rows = rows.map(r => r.map(c => String(c ?? "").trim())).filter(r => r.some(c => c));
+  if (!rows.length) { $("studentsInfo").className = "pill err"; $("studentsInfo").textContent = "Le fichier est vide."; return; }
+  setSheet(rows, f.name);
+}
+
+const FORMS_META = ["id", "heure de debut", "heure de fin", "adresse de messagerie", "nom", "heure de la derniere modification",
+  "start time", "completion time", "email", "name", "last modified time", "points totaux", "total points", "commentaires du questionnaire", "quiz feedback"];
+function guessMapping(headers) {
+  const h = headers.map(norm);
+  const isMeta = (i) => FORMS_META.includes(h[i]);
+  const used = new Set();
+  const find = (re, not) => {
+    const order = [...h.keys()].sort((a, b) => isMeta(a) - isMeta(b));   // questions du formulaire d'abord
+    for (const i of order) if (!used.has(i) && re.test(h[i]) && !(not && not.test(h[i]))) { used.add(i); return i; }
+    return -1;
+  };
+  const password = find(/mot de passe|password|mdp/);
+  const classe = find(/classe|\bclass\b|groupe|division/, /date|heure/);
+  let date = find(/date.*envoi|envoi|soumission|submitted|submission/);
+  if (date < 0) date = find(/^heure de fin$|^completion time$|^date de fin$/);
+  if (date < 0) date = find(/^heure de debut$|^start time$/);
+  if (date < 0) date = find(/\bdate\b|horodat|timestamp/, /naissance|birth/);
+  const login = find(/identifiant|login|nom d.?utilisateur|username|adresse.*pix|mail.*pix|pix.*(mail|adresse|compte)|compte pix/);
+  const loginFinal = login >= 0 ? login : find(/e-?mail|courriel|adresse/);
+  const first = find(/prenom|first ?name/, /\bnom\b.*prenom|prenom.*\bnom\b/);
+  const name = find(/nom|eleve|name|apprenti|etudiant|participant/, /utilisateur|user/);
+  return { name, first, login: loginFinal, password, classe, date };
+}
+function setSheet(rows, fileName) {
+  const hdr = rows[0];
+  const g = guessMapping(hdr);
+  const hasHeader = g.password >= 0 || g.login >= 0;
+  if (hasHeader) {
+    sheet = { headers: hdr.map((x, i) => x || `Colonne ${i + 1}`), rows: rows.slice(1), fileName };
+  } else {
+    const w = Math.max(...rows.map(r => r.length));
+    sheet = { headers: [...Array(w).keys()].map(i => `Colonne ${String.fromCharCode(65 + i)}`), rows, fileName };
+  }
+  // mapping : celui enregistré la dernière fois s'il correspond aux colonnes, sinon détection
+  const saved = settings.mapping || {};
+  const byName = (k) => saved[k] ? sheet.headers.indexOf(saved[k]) : -1;
+  let m = hasHeader ? g : { name: 0, first: -1, login: rows[0].length >= 3 ? 1 : 0, password: rows[0].length >= 3 ? 2 : 1, classe: -1, date: -1 };
+  if (byName("login") >= 0 && byName("password") >= 0) {
+    m = { name: byName("name"), first: byName("first"), login: byName("login"), password: byName("password"),
+          classe: saved.classe !== undefined ? byName("classe") : g.classe, date: saved.date !== undefined ? byName("date") : g.date };
+  }
+  for (const [k, id] of [["name", "mapName"], ["first", "mapFirst"], ["login", "mapLogin"], ["password", "mapPassword"], ["classe", "mapClass"], ["date", "mapDate"]]) {
+    const opt = `<option value="-1">— aucune —</option>` + sheet.headers.map((x, i) => `<option value="${i}">${esc(x)}</option>`).join("");
+    $(id).innerHTML = opt; $(id).value = String(m[k] ?? -1);
+  }
+  $("mappingBox").hidden = false;
+  buildStudents();
+}
+["mapName", "mapFirst", "mapLogin", "mapPassword", "mapClass", "mapDate"].forEach(id => $(id).onchange = () => {
+  settings.mapping = Object.fromEntries([["name", "mapName"], ["first", "mapFirst"], ["login", "mapLogin"], ["password", "mapPassword"], ["classe", "mapClass"], ["date", "mapDate"]]
+    .map(([k, i]) => [k, Number($(i).value) >= 0 ? sheet.headers[Number($(i).value)] : ""]));
+  save(); buildStudents();
+});
+/* Dates : nombre de série Excel (export Forms) ou texte (CSV) → affichage + clé de tri */
+const pad2 = (n) => String(n).padStart(2, "0");
+function parseDate(v) {
+  v = String(v ?? "").trim();
+  if (!v) return { text: "", sort: "" };
+  let d = null;
+  if (/^\d+(\.\d+)?$/.test(v) && +v > 20000 && +v < 80000) {
+    d = new Date(Math.round((+v - 25569) * 86400000));            // jours depuis le 30.12.1899
+  } else {
+    let m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+    if (m) d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)));
+    else if ((m = v.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})(?:[ ,]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?/i))) {
+      let a = +m[1], b = +m[2], y = +m[3]; if (y < 100) y += 2000;
+      let day = a, mon = b;
+      if (v.includes("/") && (m[7] || b > 12)) { day = b; mon = a; }   // format américain m/d/y (Forms en anglais)
+      let hh = +(m[4] || 0); if (m[7]) { if (/pm/i.test(m[7]) && hh < 12) hh += 12; if (/am/i.test(m[7]) && hh === 12) hh = 0; }
+      d = new Date(Date.UTC(y, mon - 1, day, hh, +(m[5] || 0), +(m[6] || 0)));
+    }
+  }
+  if (!d || isNaN(d)) return { text: v, sort: v };
+  const text = `${pad2(d.getUTCDate())}.${pad2(d.getUTCMonth() + 1)}.${d.getUTCFullYear()} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+  return { text, sort: d.toISOString() };
+}
+
+function buildStudents() {
+  const mi = (id) => Number($(id).value);
+  const [cN, cF, cL, cP, cC, cD] = [mi("mapName"), mi("mapFirst"), mi("mapLogin"), mi("mapPassword"), mi("mapClass"), mi("mapDate")];
+  const get = (r, c) => c >= 0 ? String(r[c] ?? "").trim() : "";
+  const byLogin = new Map(); invalid = []; let dup = 0;
+  for (const r of sheet.rows) {
+    const login = get(r, cL), password = get(r, cP);
+    const name = [get(r, cN), get(r, cF)].filter(Boolean).join(" ") || login || "(sans nom)";
+    const classe = get(r, cC), dt = parseDate(get(r, cD));
+    const extra = { classe, date: dt.text, dateSort: dt.sort };
+    if (!login || !password) { invalid.push({ name, login, ...extra, kind: "credentials", error: !login ? "Identifiant manquant dans le fichier." : "Mot de passe manquant dans le fichier." }); continue; }
+    const key = login.toLowerCase();
+    const prev = byLogin.get(key);
+    if (prev) dup++;
+    // en cas de doublon, la réponse la plus récente l'emporte (ou la dernière ligne si pas de date)
+    if (!prev || !prev.dateSort || !extra.dateSort || extra.dateSort >= prev.dateSort) byLogin.set(key, { name, login, password, ...extra });
+  }
+  students = [...byLogin.values()];
+  // aperçu
+  const sample = sheet.rows.slice(0, 3);
+  const mask = (v) => v ? "•".repeat(Math.min(8, v.length)) : "";
+  $("preview").innerHTML = sample.length ? `<div class="table-wrap" style="max-height:none"><table><thead><tr><th>Nom</th><th>Classe</th><th>Date d'envoi</th><th>Identifiant</th><th>Mot de passe</th></tr></thead><tbody>` +
+    sample.map(r => `<tr><td>${esc([get(r, cN), get(r, cF)].filter(Boolean).join(" "))}</td><td>${esc(get(r, cC))}</td><td>${esc(parseDate(get(r, cD)).text)}</td><td>${esc(get(r, cL))}</td><td>${mask(get(r, cP))}</td></tr>`).join("") +
+    `</tbody></table></div><p class="hint" style="margin:6px 0 0">Aperçu des 3 premières lignes : vérifiez que les bonnes colonnes sont choisies.</p>` : "";
+  let info = `${esc(sheet.fileName)} · ${students.length} élève${students.length > 1 ? "s" : ""}`;
+  if (dup) info += ` · ${dup} doublon${dup > 1 ? "s" : ""} (réponse la plus récente gardée)`;
+  if (invalid.length) info += ` · ${invalid.length} ligne${invalid.length > 1 ? "s" : ""} incomplète${invalid.length > 1 ? "s" : ""}`;
+  $("studentsInfo").className = "pill"; $("studentsInfo").innerHTML = info;
+  $("run").disabled = running || !(students.length || invalid.length);
+}
+const drop = $("drop");
+drop.onclick = () => $("file").click();
+$("file").onchange = (e) => { e.target.files[0] && readFile(e.target.files[0]); e.target.value = ""; };
+drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("over"); e.dataTransfer.files[0] && readFile(e.dataTransfer.files[0]); };
+
+function downloadBlob(name, blob) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+$("template").onclick = () => downloadBlob("eleves-pix-modele.csv", new Blob(["﻿nom;identifiant;mot de passe\nDupont Léa;lea.dupont1234;MotDePasse1\nMartin Noah;noah.martin@exemple.ch;MotDePasse2\n"], { type: "text/csv;charset=utf-8" }));
+
+/* ---------- Vérification ---------- */
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+$("run").onclick = () => { if (!running) openDialog("run"); };
+let lastNetErr = "", serverDown = false;
+async function runCheck() {
+  running = true; stopRequested = false; serverDown = false;
+  $("run").disabled = true; $("stop").hidden = false; $("export").disabled = true;
+  results = { date: new Date().toISOString(), domain: settings.domain, rows: [], failures: invalid.map(x => ({ ...x })) };
+  renderResults();
+  const list = [...students];
+  for (let i = 0; i < list.length; i++) {
+    if (stopRequested) break;
+    const s = list[i];
+    $("progressText").textContent = `${i + 1} / ${list.length} · ${s.name}`;
+    $("bar").style.width = (i / list.length * 100) + "%";
+    let res = null;
+    for (let attempt = 0; attempt < 3 && !res; attempt++) {
+      try { res = await api("/api/check", { domain: settings.domain, login: s.login, password: s.password }); }
+      catch (e) {
+        lastNetErr = e.message;
+        if (attempt < 2) await sleep(3000);
+      }
+    }
+    if (!res) {
+      // Le serveur local ne répond plus : ce n'est pas la faute de l'élève, on s'arrête.
+      api("/api/log", { msg: "serveur injoignable pendant la vérification : " + lastNetErr }).catch(() => {});
+      serverDown = true;
+      break;
+    }
+    if (res.ok) {
+      const row = { name: s.name, login: s.login, classe: s.classe, date: s.date, dateSort: s.dateSort, pixScore: res.pixScore, levels: {} };
+      for (const c of res.scorecards) row.levels[c.index] = { level: c.level, earnedPix: c.earnedPix, status: c.status, remainingPix: c.remainingPix };
+      results.rows.push(row);
+      if (learnComps(res.scorecards)) save();
+    } else {
+      results.failures.push({ name: s.name, login: s.login, classe: s.classe, date: s.date, dateSort: s.dateSort, error: res.error || "Erreur inconnue.", kind: res.kind || "other" });
+    }
+    renderResults();
+    if (i < list.length - 1) await sleep(700);  // on reste raisonnable avec les serveurs Pix
+  }
+  $("bar").style.width = "100%";
+  const nf = results.failures.filter(x => kindOf(x) === "credentials").length, no = results.failures.length - nf;
+  if (serverDown) $("progressText").innerHTML = `<span style="color:var(--err)">Interrompu : Suivi Pix ne répond plus (${esc(lastNetErr)}). Relancez l'app, rechargez le fichier et recommencez.</span> · `;
+  else $("progressText").textContent = "";
+  $("progressText").insertAdjacentText("beforeend", (serverDown ? "" : stopRequested ? "Arrêté · " : "Terminé · ") + `${results.rows.length} vérifié${results.rows.length > 1 ? "s" : ""}` + (nf ? ` · ${nf} inévaluable${nf > 1 ? "s" : ""}` : "") + (no ? ` · ${no} à revérifier` : ""));
+  running = false; $("stop").hidden = true;
+  $("run").disabled = !(students.length || invalid.length);
+  save(); renderResults();
+}
+$("stop").onclick = () => { stopRequested = true; $("stop").disabled = true; setTimeout(() => $("stop").disabled = false, 1500); };
+
+/* ---------- Calculs et règles ---------- */
+const lvOf = (r, k) => { const l = (r.levels || {})[k]; return !l || l.status === "NOT_STARTED" ? 0 : (l.level || 0); };
+const pixOf = (r, k) => ((r.levels || {})[k] || {}).earnedPix || 0;
+const kindOf = (x) => x.kind || (/incorrect|manquant/i.test(x.error || "") ? "credentials" : "other");
+const fmtPts = (p) => p ? "−" + String(p).replace(".", ",") : "0";
+function evalRow(r) {
+  const R = settings.rules, cols = settings.selected;
+  const lv = Object.fromEntries(cols.map(k => [k, lvOf(r, k)]));
+  const below = cols.filter(k => lv[k] < R.min);
+  const above = cols.filter(k => R.max && lv[k] > R.max);
+  const total = cols.reduce((a, k) => a + (R.cap && R.max ? Math.min(lv[k], R.max) : lv[k]), 0);
+  const totalOk = total >= R.total;
+  const penalty = below.length ? (R.penaltyMode === "each" ? below.length * R.penalty : R.penalty) : 0;
+  const issues = [];
+  if (!totalOk) issues.push(`Total insuffisant : ${total}/${R.total}`);
+  if (below.length) issues.push(`Niveau ${R.min} non atteint en ${below.join(", ")} (${fmtPts(penalty)} pt)`);
+  if (above.length) issues.push(`Niveau ${R.max} dépassé en ${above.join(", ")}`);
+  return { lv, below, above, total, totalOk, penalty, issues, ok: !issues.length };
+}
+function cellClass(r, k) {
+  const R = settings.rules, l = lvOf(r, k);
+  return l < R.min ? "bad" : (R.max && l > R.max) ? "mid" : "ok";
+}
+const clsOf = (x) => x.classe || "(sans classe)";
+const inClass = (x) => !classFilter || clsOf(x) === classFilter;
+const classKey = (c) => norm(c).replace(/\d+/g, (n) => n.padStart(6, "0"));   // 9VG2 < 9VG10
+function classesOf() {
+  const set = new Set([...results.rows, ...results.failures].map(clsOf));
+  return [...set].sort((a, b) => classKey(a) > classKey(b) ? 1 : -1);
+}
+function sortedRows() {
+  const val = (r) => {
+    if (sortKey === "name") return norm(r.name);
+    if (sortKey === "classe") return classKey(clsOf(r)) + "|" + norm(r.name);
+    if (sortKey === "date") return r.dateSort || "";
+    const e = evalRow(r);
+    if (sortKey === "total") return e.total * 10000 + settings.selected.reduce((a, k) => a + pixOf(r, k), 0);
+    if (sortKey === "penalty") return e.penalty;
+    if (sortKey === "bilan") return (e.ok ? 0 : 1) * 1000 + e.issues.length;
+    return lvOf(r, sortKey) * 10000 + pixOf(r, sortKey);
+  };
+  return results.rows.filter(inClass).sort((a, b) => (val(a) > val(b) ? 1 : val(a) < val(b) ? -1 : 0) * sortDir || (norm(a.name) > norm(b.name) ? 1 : -1));
+}
+function rulesText() {
+  const R = settings.rules;
+  return `total ≥ ${R.total} · niveau ${R.min} minimum partout (${fmtPts(R.penalty)} pt ${R.penaltyMode === "each" ? "par compétence" : "une fois"}) · niveau ${R.max} maximum` + (R.cap ? " (plafonné dans le total)" : "");
+}
+
+/* ---------- Affichage ---------- */
+function renderResults() {
+  const has = results && (results.rows.length || results.failures.length);
+  $("legend").hidden = !(results && results.rows.length);
+  if (!has) { $("results").innerHTML = ""; $("lastRun").textContent = "Aucune vérification pour l'instant."; $("errSection").hidden = true; $("export").disabled = true; return; }
+  const R = settings.rules;
+  const d = new Date(results.date);
+  $("lastRun").innerHTML = `Vérification du ${d.toLocaleDateString("fr-CH")} à ${d.toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" })} sur ${esc(results.domain)} · ` +
+    `Compétences <b>${settings.selected.map(esc).join(", ") || "aucune"}</b> · Règles : ${esc(rulesText())} <button class="link" id="changeComps">modifier</button>`;
+  $("changeComps").onclick = () => openDialog("view");
+  if (classFilter) $("lastRun").insertAdjacentHTML("beforeend", ` · <b>Classe ${esc(classFilter)}</b> <button class="link" id="allClasses">toutes les classes</button>`);
+  if (classFilter) $("allClasses").onclick = () => { classFilter = ""; renderResults(); };
+
+  const cols = settings.selected;
+  const arrow = (k) => sortKey === k ? (sortDir > 0 ? " ▲" : " ▼") : "";
+  // filtre classe
+  const classes = classesOf();
+  const hasClass = [...results.rows, ...results.failures].some(x => x.classe);
+  $("classFilterBox").hidden = !hasClass;
+  if (hasClass) {
+    if (classFilter && !classes.includes(classFilter)) classFilter = "";
+    $("classFilter").innerHTML = `<option value="">Toutes</option>` + classes.map(c => `<option value="${esc(c)}"${c === classFilter ? " selected" : ""}>${esc(c)}</option>`).join("");
+  } else classFilter = "";
+  const hasDate = [...results.rows, ...results.failures].some(x => x.date);
+  const shown = sortedRows();
+  const evals = new Map(shown.map(r => [r, evalRow(r)]));
+  const fails = results.failures.filter(inClass), nCred = fails.filter(x => kindOf(x) === "credentials").length, nOther = fails.length - nCred;
+  let h = "";
+  if (shown.length) {
+    const E = [...evals.values()];
+    const chip = (cls, txt, n) => n ? `<span class="chip ${cls}">${txt} : <b>${n}</b></span>` : "";
+    h += `<div class="chips">${chip("ok", "✓ Conformes", E.filter(e => e.ok).length)}${chip("mid", `Total < ${R.total}`, E.filter(e => !e.totalOk).length)}` +
+      `${chip("bad", `Pénalité (niveau ${R.min} non atteint)`, E.filter(e => e.penalty).length)}${chip("mid", `Niveau ${R.max} dépassé`, E.filter(e => e.above.length).length)}` +
+      `${chip("bad", "Inévaluables", nCred)}${chip("", "À revérifier", nOther)}</div>`;
+    if (hasClass && !classFilter && classes.length > 1) h += classSummaryHtml();
+    h += `<div class="table-wrap"><table><thead><tr><th class="name" data-sort="name">Élève${arrow("name")}</th>` +
+      (hasClass ? `<th data-sort="classe">Classe${arrow("classe")}</th>` : "") + (hasDate ? `<th data-sort="date">Date d'envoi${arrow("date")}</th>` : "");
+    for (const k of cols) h += `<th data-sort="${esc(k)}" title="${esc(compName(k))}">${esc(k)} ${esc(shortName(compName(k)))}${arrow(k)}</th>`;
+    h += `<th class="total" data-sort="total">Total<br><span style="font-weight:400">objectif ${R.total}</span>${arrow("total")}</th>` +
+         `<th data-sort="penalty">Pénalité${arrow("penalty")}</th><th data-sort="bilan" style="text-align:left">Bilan${arrow("bilan")}</th></tr></thead><tbody>`;
+    for (const r of shown) {
+      const e = evals.get(r);
+      h += `<tr><td class="name" title="${esc(r.login)}">${esc(r.name)}</td>` +
+        (hasClass ? `<td>${esc(r.classe)}</td>` : "") + (hasDate ? `<td class="muted" style="font-size:13px">${esc(r.date)}</td>` : "");
+      for (const k of cols) {
+        const l = (r.levels || {})[k];
+        const ns = !l || l.status === "NOT_STARTED";
+        const tip = `${compName(k)} — ${pixOf(r, k)} Pix` + (l && l.remainingPix ? `, encore ${l.remainingPix} Pix pour le niveau suivant` : "");
+        h += `<td class="lvl ${cellClass(r, k)}" title="${esc(tip)}">${ns ? "–" : l.level}<small>${pixOf(r, k)} Pix</small></td>`;
+      }
+      h += `<td class="lvl total ${e.totalOk ? "ok" : "bad"}">${e.total}<small>/ ${R.total}</small></td>`;
+      h += `<td class="lvl ${e.penalty ? "pen" : "low"}">${e.penalty ? fmtPts(e.penalty) : "–"}</td>`;
+      h += `<td class="bilan ${e.ok ? "ok" : "ko"}">${e.ok ? "✓ Conforme" : e.issues.map(esc).join("<br>")}</td></tr>`;
+    }
+    const n = shown.length;
+    if (n > 1) {
+      h += `<tr class="summary"><td class="name">Moyenne (${n} élèves)</td>` + (hasClass ? "<td></td>" : "") + (hasDate ? "<td></td>" : "");
+      for (const k of cols) h += `<td class="lvl">${(shown.reduce((a, r) => a + lvOf(r, k), 0) / n).toFixed(1)}</td>`;
+      h += `<td class="lvl total">${(E.reduce((a, e) => a + e.total, 0) / n).toFixed(1)}</td><td></td><td></td></tr>`;
+    }
+    h += `</tbody></table></div>`;
+  }
+  $("results").innerHTML = h;
+  $("legend").innerHTML = `<span><i style="background:var(--ok-bg);border:1px solid var(--ok)"></i>niveau ${R.min} à ${R.max}</span>
+    <span><i style="background:var(--err-bg);border:1px solid var(--err)"></i>sous le niveau ${R.min} (– = pas commencée, compte 0)</span>
+    <span><i style="background:var(--mid-bg);border:1px solid var(--mid)"></i>au-dessus du niveau ${R.max}</span>
+    <span>Total = somme des niveaux${R.cap ? `, chacun plafonné à ${R.max}` : ""}</span>`;
+
+  $("errSection").hidden = !fails.length;
+  $("errCount").textContent = fails.length;
+  const ordered = [...fails].sort((a, b) => (kindOf(a) === kindOf(b) ? (classKey(a.classe || "") + norm(a.name) > classKey(b.classe || "") + norm(b.name) ? 1 : -1) : kindOf(a) === "credentials" ? -1 : 1));
+  $("errors").innerHTML = fails.length ? `<div class="table-wrap"><table><thead><tr><th class="name">Élève</th>` + (hasClass ? `<th>Classe</th>` : "") + (hasDate ? `<th>Date d'envoi</th>` : "") +
+    `<th style="text-align:left">Identifiant</th><th style="text-align:left">Statut</th><th style="text-align:left">Détail</th></tr></thead><tbody>` +
+    ordered.map(x => { const c = kindOf(x) === "credentials";
+      return `<tr><td class="name">${esc(x.name)}</td>` + (hasClass ? `<td>${esc(x.classe)}</td>` : "") + (hasDate ? `<td class="muted" style="font-size:13px">${esc(x.date)}</td>` : "") + `<td class="left">${esc(x.login) || '<span class="muted">(vide)</span>'}</td>` +
+        `<td class="${c ? "status-cred" : "status-other"}">${c ? "Inévaluable – non remis" : "À revérifier"}</td><td class="left muted" style="white-space:normal">${esc(x.error)}</td></tr>`; }).join("") +
+    `</tbody></table></div>` : "";
+  $("export").disabled = running || !has;
+  $("goGradeBox").hidden = running || !has;
+  renderExportPanel();
+}
+$("classFilter").onchange = (e) => { classFilter = e.target.value; renderResults(); };
+
+/* Bilan par classe */
+function classStats() {
+  return classesOf().map(c => {
+    const rows = results.rows.filter(r => clsOf(r) === c), E = rows.map(evalRow);
+    const f = results.failures.filter(x => clsOf(x) === c);
+    const nCred = f.filter(x => kindOf(x) === "credentials").length;
+    return { classe: c, n: rows.length, ok: E.filter(e => e.ok).length, low: E.filter(e => !e.totalOk).length,
+      pen: E.filter(e => e.penalty).length, penPts: E.reduce((a, e) => a + e.penalty, 0), above: E.filter(e => e.above.length).length,
+      cred: nCred, other: f.length - nCred, avg: rows.length ? Math.round(E.reduce((a, e) => a + e.total, 0) / rows.length * 10) / 10 : null };
+  });
+}
+function classSummaryHtml() {
+  const R = settings.rules;
+  return `<h3 style="margin:16px 0 0;font-size:15px">Bilan par classe</h3><div class="table-wrap" style="max-height:none;margin-top:8px"><table><thead><tr>
+    <th class="name">Classe</th><th>Vérifiés</th><th>Conformes</th><th>Total &lt; ${R.total}</th><th>Avec pénalité</th><th>Points de pénalité</th><th>Niveau ${R.max} dépassé</th><th>Inévaluables</th><th>À revérifier</th><th>Total moyen</th></tr></thead><tbody>` +
+    classStats().map(c => `<tr><td class="name"><button class="link" data-class="${esc(c.classe)}">${esc(c.classe)}</button></td><td>${c.n}</td><td class="lvl ${c.ok ? "ok" : ""}">${c.ok}</td><td>${c.low}</td>` +
+      `<td>${c.pen}</td><td class="${c.penPts ? "pen" : ""}">${c.penPts ? fmtPts(c.penPts) : "0"}</td><td>${c.above}</td><td class="${c.cred ? "pen" : ""}">${c.cred}</td><td>${c.other}</td><td class="lvl">${c.avg ?? "–"}</td></tr>`).join("") +
+    `</tbody></table></div><p class="hint" style="margin:6px 0 0">Cliquez sur une classe pour n'afficher qu'elle.</p>`;
+}
+$("results").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-class]");
+  if (b) { classFilter = b.dataset.class; renderResults(); }
+});
+
+function shortName(n) { return n.length > 22 ? n.slice(0, 20).trim() + "…" : n; }
+$("results").addEventListener("click", (e) => {
+  const th = e.target.closest("th[data-sort]");
+  if (!th) return;
+  const k = th.dataset.sort;
+  if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = ["name", "bilan", "classe"].includes(k) ? 1 : -1; }
+  renderResults();
+});
+$("copyErr").onclick = async () => {
+  const txt = listAsText(allLists().find(l => l.key === "inevaluables")) + "\n" + listAsText(allLists().find(l => l.key === "a-reverifier")).split("\n").slice(1).join("\n");
+  try { await navigator.clipboard.writeText(txt); $("copyErr").textContent = "Copié ✓"; }
+  catch { $("copyErr").textContent = "Copie impossible"; }
+  setTimeout(() => $("copyErr").textContent = "Copier la liste", 1800);
+};
+
+/* ---------- Listes et exports ---------- */
+const cred = (x) => kindOf(x) === "credentials";
+function allLists() {
+  const R = settings.rules, rows = sortedRows(), ev = new Map(rows.map(r => [r, evalRow(r)]));
+  const f = results.failures.filter(inClass).sort((a, b) => classKey(a.classe || "") + norm(a.name) > classKey(b.classe || "") + norm(b.name) ? 1 : -1);
+  return [
+    { key: "resultats", title: "Tous les résultats", sheet: "Résultats", type: "students", rows },
+    { key: "conformes", title: "Conformes", sheet: "Conformes", type: "students", rows: rows.filter(r => ev.get(r).ok) },
+    { key: "total-insuffisant", title: `Total insuffisant (moins de ${R.total})`, sheet: "Total insuffisant", type: "students", rows: rows.filter(r => !ev.get(r).totalOk) },
+    { key: "penalites", title: `Pénalités (niveau ${R.min} non atteint)`, sheet: "Pénalités", type: "students", rows: rows.filter(r => ev.get(r).penalty) },
+    { key: "niveau-max-depasse", title: `Niveau ${R.max} dépassé`, sheet: `Niveau ${R.max} dépassé`, type: "students", rows: rows.filter(r => ev.get(r).above.length) },
+    { key: "inevaluables", title: "Inévaluables – travail non remis", sheet: "Inévaluables", type: "failures", rows: f.filter(cred) },
+    { key: "a-reverifier", title: "À revérifier (problème technique)", sheet: "À revérifier", type: "failures", rows: f.filter(x => !cred(x)) },
+  ];
+}
+const H = (v) => ({ v, s: "header" });
+function studentHeader() {
+  const R = settings.rules;
+  return ["Élève", "Classe", "Date d'envoi", "Identifiant", ...settings.selected.map(k => `${k} ${compName(k)}`), `Total (objectif ${R.total})`, "Objectif total atteint",
+    `Niveau ${R.min} atteint partout`, `Niveau ${R.max} respecté`, "Pénalité (points)", "Bilan"];
+}
+function studentCells(r) {
+  const e = evalRow(r), cols = settings.selected;
+  return [r.name, r.classe || "", r.date || "", r.login, ...cols.map(k => ({ v: lvOf(r, k), s: cellClass(r, k) === "bad" ? "err" : cellClass(r, k) === "mid" ? "mid" : "ok" })),
+    { v: e.total, s: e.totalOk ? "ok" : "mid" }, e.totalOk ? "Oui" : "Non",
+    e.below.length ? { v: "Non (" + e.below.join(", ") + ")", s: "err" } : "Oui",
+    e.above.length ? { v: "Non (" + e.above.join(", ") + ")", s: "mid" } : "Oui",
+    e.penalty ? { v: -e.penalty, s: "err" } : 0, e.ok ? { v: "Conforme", s: "ok" } : e.issues.join(" · ")];
+}
+const failureHeader = () => ["Élève", "Classe", "Date d'envoi", "Identifiant", "Statut", "Détail"];
+const failureCells = (x) => [x.name, x.classe || "", x.date || "", x.login, { v: cred(x) ? "Inévaluable – travail non remis" : "À revérifier (problème technique)", s: cred(x) ? "err" : "mid" }, x.error];
+function sheetFor(list) {
+  const isS = list.type === "students";
+  const header = (isS ? studentHeader() : failureHeader()).map(H);
+  const body = list.rows.length ? list.rows.map(isS ? studentCells : failureCells) : [[{ v: "Aucun élève dans cette liste", s: "bold" }]];
+  if (isS && list.key === "resultats" && list.rows.length > 1) {
+    const n = list.rows.length, avg = (fn) => Math.round(list.rows.reduce((a, r) => a + fn(r), 0) / n * 10) / 10;
+    body.push([{ v: "Moyenne", s: "bold" }, "", "", "", ...settings.selected.map(k => ({ v: avg(r => lvOf(r, k)), s: "bold" })), { v: avg(r => evalRow(r).total), s: "bold" }]);
+  }
+  const widths = isS ? [26, 10, 17, 28, ...settings.selected.map(() => 16), 14, 12, 18, 16, 12, 50] : [26, 10, 17, 30, 32, 50];
+  return { name: list.sheet, rows: [header, ...body], freeze: true, widths };
+}
+function infoSheet() {
+  const R = settings.rules, d = new Date(results.date);
+  return { name: "Infos", widths: [50, 26], rows: [[H("Suivi Pix"), H("")], ["Date de la vérification", d.toLocaleString("fr-CH")], ["Plateforme", results.domain],
+    ["Classe", classFilter || "toutes"], ["", ""],
+    [H("Compétences contrôlées"), H("")], ...settings.selected.map(k => [`${k} ${compName(k)}`, ""]), ["", ""],
+    [H("Règles"), H("")], ["Total des niveaux à atteindre", R.total], ["Niveau minimum dans chaque compétence", R.min],
+    ["Pénalité si niveau minimum non atteint (points)", -R.penalty], ["Pénalité appliquée", R.penaltyMode === "each" ? "par compétence concernée" : "une seule fois"],
+    ["Niveau maximum dans une compétence", R.max], ["Niveau au-dessus du maximum plafonné dans le total", R.cap ? "Oui" : "Non"],
+    ["Compétence pas commencée", "compte 0"], ["", ""],
+    [H("Bilan"), H("")], ["Élèves vérifiés", sortedRows().length], ...allLists().slice(1).map(l => [l.title, l.rows.length])] };
+}
+async function downloadXlsx(sheets, suffix) {
+  const r = await api("/api/xlsx/write", { sheets });
+  const bin = atob(r.b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const day = new Date(results.date).toISOString().slice(0, 10);
+  const cls = classFilter ? "-" + classFilter.replace(/[^\w-]+/g, "_") : "";
+  downloadBlob(`suivi-pix-${day}${cls}${suffix ? "-" + suffix : ""}.xlsx`, new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+}
+function listAsText(list) {
+  const isS = list.type === "students";
+  const plain = (c) => (c && typeof c === "object" ? c.v : c) ?? "";
+  const lines = [(isS ? studentHeader() : failureHeader()).join("\t"), ...list.rows.map(r => (isS ? studentCells(r) : failureCells(r)).map(plain).join("\t"))];
+  return lines.join("\n");
+}
+function renderExportPanel() {
+  const show = !!(results && (results.rows.length || results.failures.length)) && !running;
+  $("exportPanel").hidden = !show;
+  if (!show) return;
+  $("exportPanel").querySelector("h3").textContent = "Exporter les listes" + (classFilter ? ` — classe ${classFilter}` : "");
+  $("exportTable").innerHTML = `<thead><tr><th style="text-align:left">Liste</th><th>Élèves</th><th></th></tr></thead><tbody>` +
+    allLists().map(l => `<tr><td>${esc(l.title)}</td><td class="num">${l.rows.length}</td><td class="act">` +
+      `<button data-xlsx="${l.key}"${l.rows.length ? "" : " disabled"}>Excel</button><button data-copy="${l.key}"${l.rows.length ? "" : " disabled"}>Copier</button></td></tr>`).join("") + `</tbody>`;
+}
+$("exportTable").addEventListener("click", async (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  const list = allLists().find(l => l.key === (b.dataset.xlsx || b.dataset.copy));
+  if (!list) return;
+  if (b.dataset.xlsx) { await downloadXlsx([sheetFor(list), infoSheet()], list.key); return; }
+  try { await navigator.clipboard.writeText(listAsText(list)); b.textContent = "Copié ✓"; }
+  catch { b.textContent = "Copie impossible"; }
+  setTimeout(() => b.textContent = "Copier", 1800);
+});
+function classSheet() {
+  const R = settings.rules;
+  const head = ["Classe", "Élèves vérifiés", "Conformes", `Total < ${R.total}`, "Avec pénalité", "Points de pénalité", `Niveau ${R.max} dépassé`, "Inévaluables", "À revérifier", "Total moyen"].map(H);
+  return { name: "Par classe", freeze: true, widths: [16, 14, 12, 14, 14, 16, 16, 13, 13, 12], rows: [head,
+    ...classStats().map(c => [c.classe, c.n, { v: c.ok, s: c.ok ? "ok" : "" }, c.low, c.pen, c.penPts ? { v: -c.penPts, s: "err" } : 0, c.above, c.cred ? { v: c.cred, s: "err" } : 0, c.other, c.avg ?? ""])] };
+}
+$("export").onclick = () => {
+  const hasClass = results.rows.concat(results.failures).some(x => x.classe);
+  downloadXlsx([...allLists().map(sheetFor), ...(hasClass && !classFilter ? [classSheet()] : []), infoSheet()], "");
+};
+
+/* ---------- Démarrage / arrêt ---------- */
+$("quit").onclick = async () => {
+  if (running && !confirm("Une vérification est en cours. Quitter quand même ?")) return;
+  try { await api("/api/quit"); } catch {}
+  document.body.innerHTML = '<main><section><h2>Suivi Pix est fermé.</h2><p class="hint">Vous pouvez fermer cet onglet.</p></section></main>';
+};
+setInterval(() => api("/api/ping").catch(() => {}), 15000);
+// Onglet fermé : l'app s'arrête d'elle-même (sauf si la page est rechargée)
+window.addEventListener("pagehide", () => { try { navigator.sendBeacon("/api/bye?t=" + encodeURIComponent(TOKEN), new Blob(["{}"], { type: "text/plain" })); } catch {} });
+
+(async () => {
+  try {
+    const s = await api("/api/settings/load");
+    for (const k of ["selected", "rules", "domain", "mapping", "knownComps", "grading"]) if (s[k]) settings[k] = s[k];
+    settings.rules = { ...DEFAULT_RULES, ...(settings.rules || {}) };
+    // Mise à jour : on passe une fois aux 3 compétences et aux règles des consignes
+    if (s.defaultsVersion !== DEFAULTS_VERSION) {
+      settings.selected = [...DEFAULT_SELECTED]; settings.rules = { ...DEFAULT_RULES };
+      settings.defaultsVersion = DEFAULTS_VERSION; save();
+    }
+    if (s.lastResults && s.lastResults.rows) results = { failures: [], ...s.lastResults };
+  } catch {}
+  $("domain").value = settings.domain;
+  renderResults();
+})();
+</script>
+<script>
+/* ===================== NOTATION ===================== */
+const DEFAULT_GRADING = {
+  title: "Compétences élémentaires en informatique : PIX", maxPoints: 11, rounding: "half", nonRemisGrade: 1,
+  footerLeft: "Logisticien CFC – 2e année · Informatique", footerRight: "Fontes Carlos",
+  descriptions: {
+    "3.1": "Créer et mettre en forme un document texte : titres et styles, paragraphes et listes, insertion d'images et de tableaux, mise en page et export en PDF.",
+    "4.3": "Adopter des usages numériques sains et responsables : posture et ergonomie, temps d'écran et sommeil, cyberharcèlement, impact environnemental des appareils et des données.",
+    "5.1": "Comprendre et dépanner son environnement informatique : matériel et périphériques, système d'exploitation et fichiers, connexion au réseau, mises à jour et réglages.",
+  },
+  penaltyTypes: [
+    { id: "retard", label: "Retard", points: 1 },
+    { id: "canal", label: "Remise par le mauvais canal", points: 1 },
+    { id: "identifiant", label: "Mauvais identifiant", points: 1 },
+  ],
+  students: [], importedFrom: "",
+};
+const STATUS_LABEL = { evalue: "Évalué", non_remis: "Non remis", a_completer: "À compléter" };
+let gClass = "", gSort = "classe", gDir = 1, saveTimer = null, sdId = null, sdDraft = null;
+
+function G() {
+  if (!settings.grading) settings.grading = JSON.parse(JSON.stringify(DEFAULT_GRADING));
+  const g = settings.grading;
+  for (const k of Object.keys(DEFAULT_GRADING)) if (g[k] === undefined) g[k] = JSON.parse(JSON.stringify(DEFAULT_GRADING[k]));
+  if (g.title === "Pix – Compétences numériques") g.title = DEFAULT_GRADING.title;   // ancien titre par défaut
+  return g;
+}
+function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); }
+const gKey = (x) => x.login ? "k:" + String(x.login).trim().toLowerCase() : "n:" + norm(x.name);
+const isoToText = (iso) => { if (!iso) return ""; const d = new Date(iso); return isNaN(d) ? String(iso) : d.toLocaleDateString("fr-CH") + " " + d.toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" }); };
+const num = (v) => { const n = Number(String(v ?? "").replace(",", ".")); return Number.isFinite(n) ? n : 0; };
+const fmt2 = (v) => (Math.round(v * 100) / 100).toFixed(2);
+const fmtP = (v) => String(Math.round(v * 100) / 100).replace(".", ",");
+
+/* --- reprise des résultats de l'analyse (les pénalités et remarques sont gardées) --- */
+function syncFromResults(force) {
+  const g = G();
+  if (!results || !(results.rows.length || results.failures.length)) return false;
+  if (!force && g.importedFrom === results.date) return false;
+  const byId = new Map(g.students.map(s => [s.id, s]));
+  const upsert = (src, patch) => {
+    const id = gKey(src);
+    let s = byId.get(id);
+    if (!s) { s = { id, manualPen: {}, extra: { label: "", points: "" }, remark: "", added: false }; g.students.push(s); byId.set(id, s); }
+    Object.assign(s, { name: src.name || s.name, classe: src.classe || s.classe || "", date: src.date || s.date || "",
+                       dateSort: src.dateSort || s.dateSort || "", login: src.login || s.login || "" }, patch);
+  };
+  for (const r of results.rows) upsert(r, { source: "pix", levels: JSON.parse(JSON.stringify(r.levels || {})), checkedAt: results.date, status: "evalue", error: "" });
+  for (const f of results.failures) {
+    const ex = byId.get(gKey(f));
+    if (ex && ex.levels && ex.checkedAt && ex.checkedAt > results.date) continue;   // corrigé depuis dans la notation
+    if (ex && ex.source === "manuel" && ex.levels) continue;                        // niveaux saisis à la main
+    upsert(f, { source: "aucune", levels: null, checkedAt: results.date, error: f.error,
+                status: kindOf(f) === "credentials" ? "non_remis" : "a_completer" });
+  }
+  g.importedFrom = results.date;
+  save();
+  return true;
+}
+
+/* --- calcul des points et de la note --- */
+function roundGrade(x) {
+  const m = G().rounding;
+  return m === "half" ? Math.round(x * 2) / 2 : m === "tenth" ? Math.round(x * 10) / 10 : Math.round(x * 100) / 100;
+}
+function gradeCalc(s) {
+  const g = G(), R = settings.rules, max = num(g.maxPoints) || 11;
+  const c = { cols: [], total: 0, counted: 0, auto: 0, below: [], above: [], manual: [], penaltyTotal: 0, final: null, grade: null, state: s.status || "evalue", max };
+  for (const k of settings.selected) {
+    const l = s.levels ? s.levels[k] : null;
+    const ns = !l || l.status === "NOT_STARTED";
+    const lvl = ns ? 0 : num(l.level);
+    const kept = R.cap && R.max ? Math.min(lvl, R.max) : lvl;
+    c.cols.push({ k, lvl, kept, ns, pix: l && l.earnedPix != null && s.source === "pix" ? l.earnedPix : null });
+    c.total += kept;
+    if (lvl < R.min) c.below.push(k);
+    if (R.max && lvl > R.max) c.above.push(k);
+  }
+  c.counted = Math.min(c.total, max);
+  if (c.below.length) c.auto = R.penaltyMode === "each" ? c.below.length * R.penalty : R.penalty;
+  for (const t of g.penaltyTypes) if (s.manualPen && s.manualPen[t.id]) c.manual.push({ label: t.label, points: num(t.points) });
+  if (s.extra && num(s.extra.points)) c.manual.push({ label: s.extra.label || "Autre pénalité", points: num(s.extra.points) });
+  c.penaltyTotal = c.auto + c.manual.reduce((a, p) => a + p.points, 0);
+  if (c.state === "non_remis") {
+    c.grade = g.nonRemisGrade === "" || g.nonRemisGrade == null ? null : num(g.nonRemisGrade);
+    return c;
+  }
+  if (!s.levels || c.state === "a_completer") { c.state = "a_completer"; return c; }
+  c.final = Math.max(0, c.counted - c.penaltyTotal);
+  c.grade = roundGrade(Math.min(6, Math.max(1, c.final * 5 / max + 1)));
+  return c;
+}
+
+/* --- vue --- */
+function showView(v) {
+  $("analyseView").hidden = v !== "analyse"; $("gradingView").hidden = v !== "notes";
+  $("tabAnalyse").classList.toggle("active", v === "analyse"); $("tabNotes").classList.toggle("active", v === "notes");
+  if (v === "notes") { syncFromResults(false); renderGrading(); }
+  window.scrollTo(0, 0);
+}
+$("tabAnalyse").onclick = () => showView("analyse");
+$("tabNotes").onclick = () => showView("notes");
+$("goGrade").onclick = () => showView("notes");
+$("gSync").onclick = () => {
+  if (!results) { alert("Aucune analyse à reprendre : lancez d'abord « Vérifier les niveaux » dans l'onglet Analyse."); return; }
+  syncFromResults(true); renderGrading();
+};
+
+const gClsOf = (s) => s.classe || "(sans classe)";
+function gRows() {
+  const g = G();
+  const rows = g.students.filter(s => !gClass || gClsOf(s) === gClass);
+  const val = (s) => {
+    if (gSort === "name") return norm(s.name);
+    if (gSort === "classe") return classKey(gClsOf(s)) + "|" + norm(s.name);
+    if (gSort === "date") return s.dateSort || "";
+    const c = gradeCalc(s);
+    if (gSort === "grade") return c.grade == null ? -1 : c.grade;
+    if (gSort === "points") return c.final == null ? -1 : c.final;
+    return norm(s.name);
+  };
+  return rows.sort((a, b) => (val(a) > val(b) ? 1 : val(a) < val(b) ? -1 : 0) * gDir || (norm(a.name) > norm(b.name) ? 1 : -1));
+}
+function renderGrading() {
+  const g = G(), R = settings.rules, cols = settings.selected;
+  $("gIntro").innerHTML = `Points = somme des niveaux de ${cols.map(esc).join(", ")}` + (R.cap ? ` (chaque niveau compte ${R.max} au maximum)` : "") +
+    `, plafonnée à <b>${esc(g.maxPoints)}</b>, moins les pénalités. Note = points × 5 / ${esc(g.maxPoints)} + 1` +
+    (g.rounding === "half" ? ", arrondie au demi-point." : g.rounding === "tenth" ? ", arrondie au dixième." : ".");
+  // filtre classe
+  const classes = [...new Set(g.students.map(gClsOf))].sort((a, b) => classKey(a) > classKey(b) ? 1 : -1);
+  const hasClass = g.students.some(s => s.classe);
+  $("gClassBox").hidden = !hasClass;
+  if (gClass && !classes.includes(gClass)) gClass = "";
+  $("gClass").innerHTML = `<option value="">Toutes</option>` + classes.map(c => `<option value="${esc(c)}"${c === gClass ? " selected" : ""}>${esc(c)}</option>`).join("");
+
+  const rows = gRows();
+  ["gExcel", "gPdfAll", "gPdfZip"].forEach(id => $(id).disabled = !rows.length);
+  if (!g.students.length) {
+    $("gChips").innerHTML = "";
+    $("gTable").innerHTML = `<p class="hint" style="margin-top:14px">Aucun élève pour l'instant. Lancez une analyse dans l'onglet 1, ou ajoutez un élève à la main.</p>`;
+    return;
+  }
+  const calcs = new Map(rows.map(s => [s, gradeCalc(s)]));
+  const graded = rows.filter(s => calcs.get(s).grade != null && calcs.get(s).state === "evalue");
+  const avg = graded.length ? graded.reduce((a, s) => a + calcs.get(s).grade, 0) / graded.length : null;
+  const chip = (cls, t, n) => `<span class="chip ${cls}">${t} : <b>${n}</b></span>`;
+  $("gChips").innerHTML = chip("", "Élèves", rows.length) + (avg != null ? chip("ok", "Moyenne", avg.toFixed(2)) : "") +
+    chip("bad", "Notes < 4", graded.filter(s => calcs.get(s).grade < 4).length) +
+    chip("bad", "Non remis", rows.filter(s => calcs.get(s).state === "non_remis").length) +
+    chip("mid", "À compléter", rows.filter(s => calcs.get(s).state === "a_completer").length) +
+    chip("", "Avec pénalité", rows.filter(s => calcs.get(s).final != null && calcs.get(s).penaltyTotal > 0).length);
+
+  const arrow = (k) => gSort === k ? (gDir > 0 ? " ▲" : " ▼") : "";
+  let h = `<div class="table-wrap"><table><thead><tr><th class="name" data-gsort="name">Élève${arrow("name")}</th>` +
+    (hasClass ? `<th data-gsort="classe">Classe${arrow("classe")}</th>` : "") + `<th data-gsort="date">Envoi${arrow("date")}</th>` +
+    cols.map(k => `<th title="${esc(compName(k))}">${esc(k)}</th>`).join("") +
+    `<th class="total">Total<br><span style="font-weight:400">max ${esc(g.maxPoints)}</span></th><th>Pén.<br><span style="font-weight:400">niv. ${R.min}</span></th>` +
+    g.penaltyTypes.map(t => `<th class="pencol" title="${esc(t.label)} : −${fmtP(num(t.points))} pt">${esc(t.label)}<br><span style="font-weight:400">−${fmtP(num(t.points))}</span></th>`).join("") +
+    `<th>Autre</th><th data-gsort="points">Points${arrow("points")}</th><th data-gsort="grade">Note${arrow("grade")}</th><th></th></tr></thead><tbody>`;
+  for (const s of rows) {
+    const c = calcs.get(s);
+    const tags = (s.added ? `<span class="tag man">ajouté</span>` : "") + (s.source === "manuel" ? `<span class="tag man">niveaux manuels</span>` : "") +
+      (c.state === "non_remis" ? `<span class="tag nr">non remis</span>` : c.state === "a_completer" ? `<span class="tag">à compléter</span>` : "");
+    h += `<tr data-id="${esc(s.id)}"><td class="name" title="${esc(s.login || "")}">${esc(s.name)}${tags}</td>` +
+      (hasClass ? `<td>${esc(s.classe)}</td>` : "") + `<td class="muted" style="font-size:12px">${esc(s.date)}</td>`;
+    for (const x of c.cols) {
+      const cls = !s.levels ? "low" : x.lvl < R.min ? "bad" : R.max && x.lvl > R.max ? "mid" : "ok";
+      h += `<td class="lvl ${cls}">${!s.levels ? "" : x.ns ? "–" : x.lvl}</td>`;
+    }
+    h += `<td class="lvl total">${s.levels ? c.counted + (c.total > c.counted ? `<small>${c.total} → ${c.counted}</small>` : "") : ""}</td>` +
+      `<td class="lvl ${c.auto ? "pen" : "low"}">${s.levels && c.auto ? "−" + fmtP(c.auto) : "–"}</td>`;
+    for (const t of g.penaltyTypes) h += `<td><input type="checkbox" data-pen="${esc(t.id)}"${s.manualPen && s.manualPen[t.id] ? " checked" : ""}></td>`;
+    h += `<td><input class="extra" type="number" min="0" step="0.5" data-extra value="${esc(s.extra && s.extra.points !== "" ? s.extra.points : "")}" title="${esc((s.extra && s.extra.label) || "Autre pénalité (points)")}"></td>`;
+    h += `<td class="lvl">${c.final != null ? fmtP(c.final) : ""}${c.final != null && c.penaltyTotal ? `<small style="color:var(--err)">−${fmtP(c.penaltyTotal)}</small>` : ""}</td>`;
+    h += `<td class="grade ${c.grade == null ? "" : c.grade < 4 ? "insuf" : "suf"}">${c.grade != null ? c.grade.toFixed(2) : `<span class="muted" style="font-size:12px;font-weight:400">${esc(STATUS_LABEL[c.state] || "")}</span>`}</td>`;
+    h += `<td style="white-space:nowrap"><button class="link" data-edit title="Détail, niveaux, remarque">✎</button> <button class="link" data-pdf title="Fiche PDF">PDF</button></td></tr>`;
+  }
+  h += `</tbody></table></div>`;
+  $("gTable").innerHTML = h;
+}
+$("gClass").onchange = (e) => { gClass = e.target.value; renderGrading(); };
+$("gTable").addEventListener("click", (e) => {
+  const th = e.target.closest("th[data-gsort]");
+  if (th) { const k = th.dataset.gsort; if (gSort === k) gDir = -gDir; else { gSort = k; gDir = ["name", "classe"].includes(k) ? 1 : -1; } renderGrading(); return; }
+  const tr = e.target.closest("tr[data-id]");
+  if (!tr) return;
+  const s = G().students.find(x => x.id === tr.dataset.id);
+  if (!s) return;
+  if (e.target.closest("[data-edit]")) openStudent(s.id);
+  else if (e.target.closest("[data-pdf]")) exportPdf([s], "single");
+});
+$("gTable").addEventListener("change", (e) => {
+  const tr = e.target.closest("tr[data-id]");
+  const s = tr && G().students.find(x => x.id === tr.dataset.id);
+  if (!s) return;
+  if (e.target.dataset.pen) { s.manualPen = s.manualPen || {}; s.manualPen[e.target.dataset.pen] = e.target.checked; }
+  else if (e.target.hasAttribute("data-extra")) { s.extra = s.extra || { label: "" }; s.extra.points = e.target.value; }
+  saveSoon(); renderGrading();
+});
+
+/* --- fiche élève (détail, ajout manuel) --- */
+function openStudent(id) {
+  const g = G();
+  const s = id ? g.students.find(x => x.id === id) : null;
+  sdId = id || null;
+  sdDraft = s ? JSON.parse(JSON.stringify(s)) : {
+    id: "m:" + Date.now().toString(36), name: "", classe: gClass && gClass !== "(sans classe)" ? gClass : "", date: "", dateSort: "", login: "",
+    source: "manuel", levels: {}, status: "evalue", manualPen: { canal: true }, extra: { label: "", points: "" }, remark: "", added: true,
+  };
+  $("sdTitle").textContent = s ? s.name : "Ajouter un élève";
+  $("sdSub").textContent = s ? "" : "Pour un élève qui a remis ses accès par un autre canal : « Remise par le mauvais canal » est cochée d'office.";
+  $("sdName").value = sdDraft.name; $("sdClass").value = sdDraft.classe; $("sdDate").value = sdDraft.date; $("sdStatus").value = sdDraft.status || "evalue";
+  $("sdLogin").value = sdDraft.login || ""; $("sdPassword").value = ""; $("sdCheckMsg").textContent = sdDraft.error ? "Dernière erreur : " + sdDraft.error : "";
+  $("sdExtraLabel").value = (sdDraft.extra && sdDraft.extra.label) || ""; $("sdExtraPts").value = sdDraft.extra && sdDraft.extra.points !== undefined ? sdDraft.extra.points : "";
+  $("sdRemark").value = sdDraft.remark || "";
+  $("sdDelete").hidden = !s; $("sdPdf").hidden = !s;
+  renderSdLevels(); renderSdPens(); renderSdPreview();
+  $("studentDialog").showModal();
+}
+function renderSdLevels() {
+  const src = sdDraft.source === "pix" ? `Niveaux relevés sur Pix le ${esc(isoToText(sdDraft.checkedAt))}. Modifier une valeur la marque comme saisie à la main.`
+    : sdDraft.source === "manuel" ? "Niveaux saisis à la main (laisser vide = compétence pas commencée)."
+    : "Pas encore de niveaux : saisissez-les ou vérifiez avec les identifiants corrigés ci-dessous.";
+  $("sdSource").innerHTML = src;
+  $("sdLevels").innerHTML = settings.selected.map(k => {
+    const l = sdDraft.levels ? sdDraft.levels[k] : null;
+    const v = !l || l.status === "NOT_STARTED" ? "" : l.level;
+    return `<label>${esc(k)} ${esc(compName(k))}<input type="number" min="0" max="8" step="1" data-lvl="${esc(k)}" value="${esc(v)}" placeholder="–"></label>`;
+  }).join("");
+}
+function renderSdPens() {
+  const g = G(), R = settings.rules;
+  const c = gradeCalc(sdDraft);
+  let h = `<div class="pen-line muted">Niveau ${R.min} non atteint (automatique)${c.below.length ? " : " + c.below.join(", ") : ""}<span class="pts">${c.auto ? "−" + fmtP(c.auto) : "0"}</span></div>`;
+  h += g.penaltyTypes.map(t => `<label class="pen-line"><input type="checkbox" data-sdpen="${esc(t.id)}"${sdDraft.manualPen && sdDraft.manualPen[t.id] ? " checked" : ""}> ${esc(t.label)}<span class="pts">−${fmtP(num(t.points))}</span></label>`).join("");
+  $("sdPens").innerHTML = h;
+}
+function renderSdPreview() {
+  const c = gradeCalc(sdDraft);
+  $("sdPreview").innerHTML = c.state === "non_remis"
+    ? `<span>Non remis : note <b class="big">${c.grade != null ? c.grade.toFixed(2) : "–"}</b></span>`
+    : c.state === "a_completer" ? `<span class="muted">Niveaux manquants : la note sera calculée quand ils seront saisis ou vérifiés.</span>`
+    : `<span>Total retenu <b>${c.counted}</b> / ${c.max}</span><span>Pénalités <b style="color:var(--err)">${c.penaltyTotal ? "−" + fmtP(c.penaltyTotal) : "0"}</b></span>` +
+      `<span>Points <b>${fmtP(c.final)}</b> / ${c.max}</span><span>Note <b class="big" style="color:${c.grade < 4 ? "var(--err)" : "var(--ok)"}">${c.grade.toFixed(2)}</b></span>`;
+}
+function readSd() {
+  sdDraft.name = $("sdName").value.trim(); sdDraft.classe = $("sdClass").value.trim();
+  if ($("sdDate").value.trim() !== sdDraft.date) { const d = parseDate($("sdDate").value); sdDraft.date = d.text; sdDraft.dateSort = d.sort; }
+  sdDraft.status = $("sdStatus").value;
+  sdDraft.extra = { label: $("sdExtraLabel").value.trim(), points: $("sdExtraPts").value };
+  sdDraft.remark = $("sdRemark").value;
+  sdDraft.login = $("sdLogin").value.trim();
+}
+$("studentDialog").addEventListener("input", (e) => {
+  if (e.target.dataset.lvl) {
+    const k = e.target.dataset.lvl, v = e.target.value;
+    if (!sdDraft.levels) sdDraft.levels = {};
+    sdDraft.levels[k] = v === "" ? { level: 0, status: "NOT_STARTED" } : { level: Math.max(0, Math.min(8, Math.round(num(v)))), status: "STARTED", earnedPix: null };
+    if (sdDraft.source !== "manuel") { sdDraft.source = "manuel"; $("sdSource").textContent = "Niveaux modifiés à la main."; }
+    if (sdDraft.status === "a_completer" || sdDraft.status === "non_remis") { sdDraft.status = "evalue"; $("sdStatus").value = "evalue"; }
+  }
+  if (e.target.dataset.sdpen) { sdDraft.manualPen = sdDraft.manualPen || {}; sdDraft.manualPen[e.target.dataset.sdpen] = e.target.checked; }
+  readSd(); renderSdPens(); renderSdPreview();
+});
+$("sdStatus").onchange = () => { readSd(); renderSdPreview(); };
+$("sdCheck").onclick = async () => {
+  readSd();
+  const login = sdDraft.login, password = $("sdPassword").value;
+  if (!login || !password) { $("sdCheckMsg").textContent = "Indiquez l'identifiant et le mot de passe Pix."; return; }
+  $("sdCheck").disabled = true; $("sdCheckMsg").textContent = "Vérification sur Pix…";
+  let res;
+  try { res = await api("/api/check", { domain: settings.domain, login, password }); }
+  catch (e) { res = { ok: false, error: "Suivi Pix ne répond pas (" + e.message + ")." }; }
+  $("sdCheck").disabled = false;
+  if (!res.ok) { $("sdCheckMsg").innerHTML = `<span style="color:var(--err)">${esc(res.error)}</span>`; return; }
+  const wasWrongId = sdDraft.status === "non_remis" || /incorrect|manquant/i.test(sdDraft.error || "");
+  sdDraft.levels = {};
+  for (const c of res.scorecards) sdDraft.levels[c.index] = { level: c.level, earnedPix: c.earnedPix, status: c.status };
+  if (learnComps(res.scorecards)) save();
+  sdDraft.source = "pix"; sdDraft.checkedAt = new Date().toISOString(); sdDraft.status = "evalue"; sdDraft.error = "";
+  $("sdStatus").value = "evalue"; $("sdPassword").value = "";
+  if (wasWrongId && G().penaltyTypes.some(t => t.id === "identifiant")) { sdDraft.manualPen = sdDraft.manualPen || {}; sdDraft.manualPen.identifiant = true; }
+  $("sdCheckMsg").innerHTML = `<span style="color:var(--ok)">Niveaux récupérés sur Pix.</span>` + (wasWrongId ? " « Mauvais identifiant » a été cochée (décochez si besoin)." : "");
+  renderSdLevels(); renderSdPens(); renderSdPreview();
+};
+$("sdCancel").onclick = () => $("studentDialog").close();
+$("sdSave").onclick = () => {
+  readSd();
+  if (!sdDraft.name) { $("sdName").focus(); return; }
+  const g = G();
+  if (sdId) { const i = g.students.findIndex(x => x.id === sdId); if (i >= 0) g.students[i] = sdDraft; }
+  else {
+    if (sdDraft.login && g.students.some(x => x.id === gKey(sdDraft))) { alert("Un élève avec cet identifiant Pix existe déjà dans la liste."); return; }
+    if (sdDraft.login) sdDraft.id = gKey(sdDraft);
+    g.students.push(sdDraft);
+  }
+  save(); $("studentDialog").close(); renderGrading();
+};
+$("sdDelete").onclick = () => {
+  const s = G().students.find(x => x.id === sdId);
+  if (!s || !confirm(`Retirer ${s.name} de la notation ?` + (s.added ? "" : "\n(Il reviendra si vous cliquez sur « Mettre à jour depuis l'analyse ».)"))) return;
+  G().students = G().students.filter(x => x.id !== sdId);
+  save(); $("studentDialog").close(); renderGrading();
+};
+$("sdPdf").onclick = () => { readSd(); exportPdf([sdDraft], "single"); };
+$("gAdd").onclick = () => openStudent(null);
+
+/* --- barème --- */
+let bDraft = null;
+$("gBareme").onclick = () => {
+  const g = G();
+  bDraft = JSON.parse(JSON.stringify(g.penaltyTypes));
+  $("bTitle").value = g.title; $("bFooterLeft").value = g.footerLeft || ""; $("bFooterRight").value = g.footerRight || "";
+  $("bDescs").innerHTML = settings.selected.map(k => `<label class="fld" style="margin-bottom:8px">${esc(k)} ${esc(compName(k))}` +
+    `<textarea data-desc="${esc(k)}" style="min-height:48px">${esc((g.descriptions || {})[k] || "")}</textarea></label>`).join("");
+  $("bMax").value = g.maxPoints; $("bRound").value = g.rounding; $("bNonRemis").value = g.nonRemisGrade ?? "";
+  renderBTypes(); $("baremeDialog").showModal();
+};
+function renderBTypes() {
+  $("bTypes").innerHTML = bDraft.map((t, i) => `<div class="bt-row"><input data-bt="${i}" data-f="label" value="${esc(t.label)}" placeholder="Motif">` +
+    `<input data-bt="${i}" data-f="points" type="number" min="0" step="0.5" value="${esc(t.points)}" title="Points retirés"><button class="link" data-btdel="${i}" title="Supprimer">✕</button></div>`).join("") ||
+    `<p class="hint">Aucune pénalité manuelle.</p>`;
+}
+$("bTypes").addEventListener("input", (e) => { const i = e.target.dataset.bt; if (i != null) bDraft[i][e.target.dataset.f] = e.target.value; });
+$("bTypes").addEventListener("click", (e) => { const i = e.target.dataset.btdel; if (i != null) { bDraft.splice(+i, 1); renderBTypes(); } });
+$("bAddType").onclick = () => { bDraft.push({ id: "p" + Date.now().toString(36), label: "", points: 1 }); renderBTypes(); };
+$("bCancel").onclick = () => $("baremeDialog").close();
+$("bSave").onclick = () => {
+  const g = G();
+  g.title = $("bTitle").value.trim() || DEFAULT_GRADING.title;
+  g.footerLeft = $("bFooterLeft").value.trim(); g.footerRight = $("bFooterRight").value.trim();
+  g.descriptions = g.descriptions || {};
+  document.querySelectorAll("#bDescs textarea[data-desc]").forEach(t => { g.descriptions[t.dataset.desc] = t.value.trim(); });
+  g.maxPoints = Math.max(1, num($("bMax").value) || 11);
+  g.rounding = $("bRound").value;
+  g.nonRemisGrade = $("bNonRemis").value === "" ? "" : Math.min(6, Math.max(1, num($("bNonRemis").value)));
+  g.penaltyTypes = bDraft.filter(t => t.label.trim()).map(t => ({ ...t, label: t.label.trim(), points: num(t.points) }));
+  save(); $("baremeDialog").close(); renderGrading();
+};
+
+/* --- PDF (fiches au style LogiExam) --- */
+function rulesLines() {
+  const g = G(), R = settings.rules;
+  const lines = [`Total d'au moins ${R.total} points dans les compétences ${settings.selected.join(", ")} (${g.maxPoints} points au maximum, soit la note 6) · niveau ${R.min} au minimum dans chaque compétence, sinon -${fmtP(R.penalty)} point${R.penaltyMode === "each" ? " par compétence" : ""}` +
+    (R.max ? ` · niveau ${R.max} au maximum dans une compétence${R.cap ? ` (au-delà, la compétence compte pour ${R.max})` : ""}.` : ".")];
+  lines.push(`Note = points × 5 / ${g.maxPoints} + 1` + (g.rounding === "half" ? ", arrondie au demi-point." : g.rounding === "tenth" ? ", arrondie au dixième." : "."));
+  return lines;
+}
+function pdfStudent(s) {
+  const c = gradeCalc(s), R = settings.rules;
+  const descs = G().descriptions || {};
+  const comps = !s.levels ? c.cols.map(x => ({ index: x.k, name: compName(x.k), desc: descs[x.k] || "", right: "Non évalué", detail: "", comment: "" }))
+    : c.cols.map(x => ({
+    index: x.k, name: compName(x.k), desc: descs[x.k] || "", right: x.ns ? "Pas commencée" : "Niveau " + x.lvl,
+    detail: (x.pix != null ? `${x.pix} Pix obtenus · ` : s.source === "manuel" ? "Niveau saisi par l'enseignant · " : "") +
+      `compte ${x.kept} point${x.kept > 1 ? "s" : ""}` + (x.lvl > x.kept ? ` (niveau ${R.max} au maximum)` : ""),
+    comment: x.lvl < R.min ? `Niveau ${R.min} non atteint : pénalité${R.penaltyMode === "each" ? ` de ${fmtP(R.penalty)} point` : " (appliquée une seule fois)"}.`
+      : R.max && x.lvl > R.max ? `Niveau ${R.max} dépassé : compte pour ${R.max} dans le total.` : "",
+    alert: x.lvl < R.min || (R.max && x.lvl > R.max),
+  }));
+  const pens = [];
+  if (s.levels && c.auto) pens.push({ label: `Niveau ${R.min} non atteint en ${c.below.join(", ")}`, points: c.auto });
+  pens.push(...c.manual);
+  const totalLabel = s.levels ? `${c.total}` + (c.cols.length ? ` (${c.cols.map(x => x.kept).join(" + ")})` : "") : "-";
+  return {
+    name: s.name, classe: s.classe, login: s.login, date: s.date, checkedAt: isoToText(s.checkedAt),
+    status: c.state, total: c.total, totalLabel, counted: s.levels ? c.counted : 0, penaltyTotal: c.state === "non_remis" ? 0 : c.penaltyTotal,
+    finalPoints: c.final ?? 0, grade: c.grade != null ? c.grade.toFixed(2) : (c.state === "a_completer" ? "Non calculée" : ""),
+    competences: comps, penalties: c.state === "non_remis" ? [] : pens, remark: s.remark || "",
+    nonRemisText: "Les identifiants Pix transmis sont incorrects ou absents : selon les consignes, le travail est inévaluable et n'est pas considéré comme remis.",
+  };
+}
+async function exportPdf(list, mode) {
+  const g = G();
+  const meta = { title: g.title, maxPoints: g.maxPoints, rules: rulesLines(), footerLeft: g.footerLeft || "", footerRight: g.footerRight || "",
+                 generatedAt: new Date().toLocaleDateString("fr-CH") + " " + new Date().toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" }) };
+  const btn = mode === "zip" ? $("gPdfZip") : mode === "combined" ? $("gPdfAll") : null;
+  if (btn) { btn.disabled = true; btn.dataset.t = btn.textContent; btn.textContent = "Création…"; }
+  try {
+    const r = await api("/api/pdf", { students: list.map(pdfStudent), meta, mode });
+    if (!r.ok) { alert(r.error || "La création du PDF a échoué."); return; }
+    const bin = atob(r.b64), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const day = new Date().toISOString().slice(0, 10), cls = gClass ? "-" + gClass.replace(/[^\w-]+/g, "_") : "";
+    const one = list[0] ? String(list[0].name || "eleve").replace(/[\\/:*?"<>|]+/g, "-") : "eleve";
+    const name = mode === "zip" ? `fiches-pix-${day}${cls}.zip` : mode === "combined" ? `fiches-pix-${day}${cls}.pdf` : `fiche-pix-${one}.pdf`;
+    downloadBlob(name, new Blob([bytes], { type: mode === "zip" ? "application/zip" : "application/pdf" }));
+  } finally { if (btn) { btn.disabled = false; btn.textContent = btn.dataset.t; } }
+}
+$("gPdfAll").onclick = () => exportPdf(gRows(), "combined");
+$("gPdfZip").onclick = () => exportPdf(gRows(), "zip");
+
+/* --- Excel des notes --- */
+$("gExcel").onclick = async () => {
+  const g = G(), R = settings.rules, rows = gRows(), cols = settings.selected;
+  const H = (v) => ({ v, s: "header" });
+  const head = ["Élève", "Classe", "Date d'envoi", "Compte Pix", ...cols.map(k => `${k} ${compName(k)}`), "Total des niveaux retenus", `Points pris en compte (max ${g.maxPoints})`,
+    `Pénalité niveau ${R.min}`, ...g.penaltyTypes.map(t => `${t.label} (−${fmtP(num(t.points))})`), "Autre pénalité", "Motif autre pénalité", "Total pénalités",
+    "Points finaux", "Note", "Statut", "Remarque"].map(H);
+  const body = rows.map(s => {
+    const c = gradeCalc(s);
+    return [s.name, s.classe || "", s.date || "", s.login || "",
+      ...c.cols.map(x => s.levels ? { v: x.lvl, s: x.lvl < R.min ? "err" : R.max && x.lvl > R.max ? "mid" : "ok" } : ""),
+      s.levels ? c.total : "", s.levels ? c.counted : "", s.levels && c.final != null && c.auto ? -c.auto : 0,
+      ...g.penaltyTypes.map(t => s.manualPen && s.manualPen[t.id] ? -num(t.points) : 0),
+      s.extra && num(s.extra.points) ? -num(s.extra.points) : 0, (s.extra && s.extra.label) || "",
+      c.final != null && c.penaltyTotal ? { v: -c.penaltyTotal, s: "err" } : 0, c.final != null ? c.final : "",
+      c.grade != null ? { v: c.grade, s: c.grade < 4 ? "err" : "bold" } : "", STATUS_LABEL[c.state] || "", s.remark || ""];
+  });
+  const graded = rows.map(gradeCalc).filter(c => c.grade != null && c.state === "evalue");
+  const info = [[H("Notation Suivi Pix"), H("")], ["Cours", g.title], ["Formation", g.footerLeft || ""], ["Enseignant", g.footerRight || ""], ["Date", new Date().toLocaleString("fr-CH")], ["Classe", gClass || "toutes"], ["", ""],
+    ["Points maximum (note 6)", g.maxPoints], ["Formule", `points × 5 / ${g.maxPoints} + 1`], ["Arrondi", g.rounding === "half" ? "demi-point" : g.rounding === "tenth" ? "dixième" : "centième"],
+    ["Note d'un travail non remis", g.nonRemisGrade === "" ? "pas de note" : g.nonRemisGrade], ...rulesLines().map(l => [l, ""]), ["", ""],
+    ["Élèves", rows.length], ["Moyenne des notes", graded.length ? Math.round(graded.reduce((a, c) => a + c.grade, 0) / graded.length * 100) / 100 : ""]];
+  const r = await api("/api/xlsx/write", { sheets: [
+    { name: "Notes", rows: [head, ...body], freeze: true, widths: [26, 10, 17, 26, ...cols.map(() => 14), 12, 14, 12, ...g.penaltyTypes.map(() => 14), 10, 22, 12, 10, 8, 12, 40] },
+    { name: "Barème", rows: info, widths: [70, 20] }] });
+  const bin = atob(r.b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  downloadBlob(`notes-pix-${new Date().toISOString().slice(0, 10)}${gClass ? "-" + gClass.replace(/[^\w-]+/g, "_") : ""}.xlsx`, new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+};
+</script>
+</body>
+</html>

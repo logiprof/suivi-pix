@@ -1,0 +1,81 @@
+SUIVI PIX — mode d'emploi
+
+1. INSTALLER
+   - Glissez « Suivi Pix.app » dans le dossier Applications.
+   - Premier lancement : macOS bloque les apps téléchargées qui ne viennent pas
+     de l'App Store. Double-cliquez une fois, fermez le message, puis allez dans
+     Réglages Système > Confidentialité et sécurité, tout en bas :
+     « Suivi Pix a été bloqué » > Ouvrir quand même.
+     (Ou, dans le Terminal :  xattr -dr com.apple.quarantine "/Applications/Suivi Pix.app")
+
+2. UTILISER
+   - L'app s'ouvre dans votre navigateur (adresse 127.0.0.1 : elle tourne
+     uniquement sur votre Mac).
+   - Déposez l'export Excel de Microsoft Forms (.xlsx) ou un CSV. L'app repère
+     seule les colonnes Nom / Identifiant / Mot de passe ; vérifiez l'aperçu et
+     corrigez le choix des colonnes si besoin (il est retenu pour la prochaine fois).
+     Les colonnes « Classe » et « Date d'envoi » (Heure de fin dans Forms) sont
+     reprises aussi (facultatives). Si un élève a répondu deux fois au formulaire,
+     sa réponse la plus récente est gardée.
+   - « Vérifier les niveaux… » : les 3 compétences contrôlées sont cochées d'office
+     (3.1, 4.3, 5.1) avec les règles des consignes, modifiables en bas de la fenêtre :
+       · total des 3 niveaux : 11 au minimum
+       · niveau 2 au minimum dans chaque compétence, sinon −1 point par compétence
+       · niveau 6 au maximum (au-delà, la compétence compte 6 dans le total)
+   - Tableau : niveau de chaque élève par compétence (vert = 2 à 6, rouge = sous 2,
+     orange = au-dessus de 6), total, pénalité et bilan (« Conforme » ou ce qui
+     manque). Une compétence pas commencée compte 0. Cliquez sur un titre de
+     colonne pour trier.
+   - Classe et date d'envoi sont affichées pour chaque élève (tri en cliquant sur
+     le titre). « Bilan par classe » : conformes, pénalités, points de pénalité,
+     inévaluables et total moyen de chaque classe ; cliquer sur une classe (ou
+     utiliser le menu « Classe ») n'affiche qu'elle, exports compris.
+   - Sous le tableau : les élèves INÉVALUABLES (identifiant ou mot de passe
+     incorrect ou absent → travail non remis) et ceux À REVÉRIFIER (problème
+     technique, à relancer).
+   - « Exporter les listes » (sous le tableau) : chaque liste en Excel ou à
+     copier : tous les résultats, conformes, total insuffisant, pénalités,
+     niveau 6 dépassé, inévaluables, à revérifier.
+     « Tout exporter (Excel) » : un seul classeur, un onglet par liste, un onglet
+     « Par classe » et l'onglet Infos. Toutes les listes ont les colonnes Classe
+     et Date d'envoi.
+   - « Quitter » pour arrêter l'app (elle s'arrête aussi seule quelques minutes
+     après la fermeture de l'onglet).
+
+   - « Passer à la notation → » (ou l'onglet « 2. Notation ») : tous les élèves
+     de l'analyse avec leurs niveaux, le total (11 points au maximum), les
+     pénalités et la note = points × 5 / 11 + 1 (entre 1 et 6, arrondie au
+     demi-point comme LogiExam).
+       · Pénalités manuelles à cocher dans le tableau : retard, remise par le
+         mauvais canal, mauvais identifiant (+ « Autre », points libres).
+         Types et points modifiables dans « Barème et pénalités… ».
+       · ✎ : détail d'un élève (niveaux, remarque, statut). Identifiants
+         corrigés → « Vérifier sur Pix » récupère les niveaux et coche
+         « Mauvais identifiant ».
+       · « + Ajouter un élève » : élève remis par un autre canal (« Remise par
+         le mauvais canal » cochée d'office), niveaux saisis ou vérifiés sur Pix.
+       · Travail non remis : note 1 (modifiable dans le barème).
+       · Tout est enregistré automatiquement (sans mot de passe).
+   - Fiches PDF (style LogiExam, une page par élève) : nom de l'élève en grand,
+     classe en grand dans le bandeau, cours, description des 3 compétences
+     travaillées en autonomie, niveaux, note et pénalités, pied de page
+     (formation et enseignant). Cours, descriptions et pied de page se
+     modifient dans « Barème et pénalités… ». « PDF : tous les élèves »
+     (un fichier à imprimer) ou « un fichier par élève (.zip) », ou le lien PDF
+     d'une ligne. « Notes (Excel) » : tableau des notes et barème.
+
+3. CONFIDENTIALITÉ
+   - Les mots de passe ne sont jamais enregistrés par l'app : seuls vos choix de
+     compétences et le dernier tableau de niveaux sont gardés dans
+     ~/Library/Application Support/Suivi Pix/
+   - Rangez le fichier des mots de passe (export Forms) dans un endroit protégé et
+     supprimez-le quand vous n'en avez plus besoin.
+
+4. SI ÇA NE MARCHE PAS
+   - Un journal de diagnostic (sans identifiants) est écrit dans
+     ~/Library/Logs/Suivi Pix.log : utile à transmettre en cas de problème.
+   - « Identifiant ou mot de passe incorrect » : vérifiez la ligne du CSV.
+     Attention, trop d'essais ratés bloquent temporairement le compte de l'élève.
+   - Comptes créés sur pix.org plutôt que pix.fr : changez la plateforme en haut
+     à droite.
+   - Comptes connectés via l'ENT/GAR (sans mot de passe Pix) : non pris en charge.
