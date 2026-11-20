@@ -56,7 +56,11 @@ SUIVI PIX — mode d'emploi
          le mauvais canal » cochée d'office), niveaux saisis ou vérifiés sur Pix.
        · Travail non remis : note 1 (modifiable dans le barème).
        · Tout est enregistré automatiquement (sans mot de passe).
-   - Fiches PDF (style LogiExam, une page par élève) : « PDF : tous les élèves »
+   - Fiches PDF (style LogiExam, une page par élève) : nom de l'élève en grand,
+     classe en grand dans le bandeau, cours, description des 3 compétences
+     travaillées en autonomie, niveaux, note et pénalités, pied de page
+     (formation et enseignant). Cours, descriptions et pied de page se
+     modifient dans « Barème et pénalités… ». « PDF : tous les élèves »
      (un fichier à imprimer) ou « un fichier par élève (.zip) », ou le lien PDF
      d'une ligne. « Notes (Excel) » : tableau des notes et barème.
 

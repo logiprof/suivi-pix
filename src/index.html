@@ -250,10 +250,16 @@
   <div class="dlg-head"><h2>Barème et pénalités</h2><p class="hint" style="margin:0 0 4px">Note = points × 5 / points maximum + 1, entre 1 et 6 (comme LogiExam).</p></div>
   <div class="dlg-body">
     <div class="form-grid">
-      <label>Titre de l'évaluation (sur les fiches)<input id="bTitle"></label>
+      <label>Cours (sur les fiches)<input id="bTitle"></label>
+      <label>Pied de page : formation et branche<input id="bFooterLeft"></label>
+      <label>Pied de page : enseignant<input id="bFooterRight"></label>
       <label>Points maximum (= note 6)<input id="bMax" type="number" min="1" step="1"></label>
       <label>Arrondi de la note<select id="bRound"><option value="half">au demi-point (comme LogiExam)</option><option value="tenth">au dixième</option><option value="hundredth">au centième</option></select></label>
       <label>Note d'un travail non remis<input id="bNonRemis" type="number" min="1" max="6" step="0.5" placeholder="vide = pas de note"></label>
+    </div>
+    <div class="box">
+      <h3>Description des compétences travaillées (sur les fiches)</h3>
+      <div id="bDescs"></div>
     </div>
     <div class="box">
       <h3>Pénalités manuelles</h3>
@@ -919,7 +925,13 @@ window.addEventListener("pagehide", () => { try { navigator.sendBeacon("/api/bye
 <script>
 /* ===================== NOTATION ===================== */
 const DEFAULT_GRADING = {
-  title: "Pix – Compétences numériques", maxPoints: 11, rounding: "half", nonRemisGrade: 1,
+  title: "Compétences élémentaires en informatique : PIX", maxPoints: 11, rounding: "half", nonRemisGrade: 1,
+  footerLeft: "Logisticien CFC – 2e année · Informatique", footerRight: "Fontes Carlos",
+  descriptions: {
+    "3.1": "Créer et mettre en forme un document texte : titres et styles, paragraphes et listes, insertion d'images et de tableaux, mise en page et export en PDF.",
+    "4.3": "Adopter des usages numériques sains et responsables : posture et ergonomie, temps d'écran et sommeil, cyberharcèlement, impact environnemental des appareils et des données.",
+    "5.1": "Comprendre et dépanner son environnement informatique : matériel et périphériques, système d'exploitation et fichiers, connexion au réseau, mises à jour et réglages.",
+  },
   penaltyTypes: [
     { id: "retard", label: "Retard", points: 1 },
     { id: "canal", label: "Remise par le mauvais canal", points: 1 },
@@ -934,6 +946,7 @@ function G() {
   if (!settings.grading) settings.grading = JSON.parse(JSON.stringify(DEFAULT_GRADING));
   const g = settings.grading;
   for (const k of Object.keys(DEFAULT_GRADING)) if (g[k] === undefined) g[k] = JSON.parse(JSON.stringify(DEFAULT_GRADING[k]));
+  if (g.title === "Pix – Compétences numériques") g.title = DEFAULT_GRADING.title;   // ancien titre par défaut
   return g;
 }
 function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); }
@@ -1221,7 +1234,10 @@ let bDraft = null;
 $("gBareme").onclick = () => {
   const g = G();
   bDraft = JSON.parse(JSON.stringify(g.penaltyTypes));
-  $("bTitle").value = g.title; $("bMax").value = g.maxPoints; $("bRound").value = g.rounding; $("bNonRemis").value = g.nonRemisGrade ?? "";
+  $("bTitle").value = g.title; $("bFooterLeft").value = g.footerLeft || ""; $("bFooterRight").value = g.footerRight || "";
+  $("bDescs").innerHTML = settings.selected.map(k => `<label class="fld" style="margin-bottom:8px">${esc(k)} ${esc(compName(k))}` +
+    `<textarea data-desc="${esc(k)}" style="min-height:48px">${esc((g.descriptions || {})[k] || "")}</textarea></label>`).join("");
+  $("bMax").value = g.maxPoints; $("bRound").value = g.rounding; $("bNonRemis").value = g.nonRemisGrade ?? "";
   renderBTypes(); $("baremeDialog").showModal();
 };
 function renderBTypes() {
@@ -1236,6 +1252,9 @@ $("bCancel").onclick = () => $("baremeDialog").close();
 $("bSave").onclick = () => {
   const g = G();
   g.title = $("bTitle").value.trim() || DEFAULT_GRADING.title;
+  g.footerLeft = $("bFooterLeft").value.trim(); g.footerRight = $("bFooterRight").value.trim();
+  g.descriptions = g.descriptions || {};
+  document.querySelectorAll("#bDescs textarea[data-desc]").forEach(t => { g.descriptions[t.dataset.desc] = t.value.trim(); });
   g.maxPoints = Math.max(1, num($("bMax").value) || 11);
   g.rounding = $("bRound").value;
   g.nonRemisGrade = $("bNonRemis").value === "" ? "" : Math.min(6, Math.max(1, num($("bNonRemis").value)));
@@ -1253,14 +1272,16 @@ function rulesLines() {
 }
 function pdfStudent(s) {
   const c = gradeCalc(s), R = settings.rules;
-  const comps = s.levels ? c.cols.map(x => ({
-    index: x.k, name: compName(x.k), right: x.ns ? "Pas commencée" : "Niveau " + x.lvl,
+  const descs = G().descriptions || {};
+  const comps = !s.levels ? c.cols.map(x => ({ index: x.k, name: compName(x.k), desc: descs[x.k] || "", right: "Non évalué", detail: "", comment: "" }))
+    : c.cols.map(x => ({
+    index: x.k, name: compName(x.k), desc: descs[x.k] || "", right: x.ns ? "Pas commencée" : "Niveau " + x.lvl,
     detail: (x.pix != null ? `${x.pix} Pix obtenus · ` : s.source === "manuel" ? "Niveau saisi par l'enseignant · " : "") +
       `compte ${x.kept} point${x.kept > 1 ? "s" : ""}` + (x.lvl > x.kept ? ` (niveau ${R.max} au maximum)` : ""),
     comment: x.lvl < R.min ? `Niveau ${R.min} non atteint : pénalité${R.penaltyMode === "each" ? ` de ${fmtP(R.penalty)} point` : " (appliquée une seule fois)"}.`
       : R.max && x.lvl > R.max ? `Niveau ${R.max} dépassé : compte pour ${R.max} dans le total.` : "",
     alert: x.lvl < R.min || (R.max && x.lvl > R.max),
-  })) : [];
+  }));
   const pens = [];
   if (s.levels && c.auto) pens.push({ label: `Niveau ${R.min} non atteint en ${c.below.join(", ")}`, points: c.auto });
   pens.push(...c.manual);
@@ -1269,13 +1290,13 @@ function pdfStudent(s) {
     name: s.name, classe: s.classe, login: s.login, date: s.date, checkedAt: isoToText(s.checkedAt),
     status: c.state, total: c.total, totalLabel, counted: s.levels ? c.counted : 0, penaltyTotal: c.state === "non_remis" ? 0 : c.penaltyTotal,
     finalPoints: c.final ?? 0, grade: c.grade != null ? c.grade.toFixed(2) : (c.state === "a_completer" ? "Non calculée" : ""),
-    competences: c.state === "non_remis" ? [] : comps, penalties: c.state === "non_remis" ? [] : pens, remark: s.remark || "",
+    competences: comps, penalties: c.state === "non_remis" ? [] : pens, remark: s.remark || "",
     nonRemisText: "Les identifiants Pix transmis sont incorrects ou absents : selon les consignes, le travail est inévaluable et n'est pas considéré comme remis.",
   };
 }
 async function exportPdf(list, mode) {
   const g = G();
-  const meta = { title: g.title, maxPoints: g.maxPoints, rules: rulesLines(),
+  const meta = { title: g.title, maxPoints: g.maxPoints, rules: rulesLines(), footerLeft: g.footerLeft || "", footerRight: g.footerRight || "",
                  generatedAt: new Date().toLocaleDateString("fr-CH") + " " + new Date().toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" }) };
   const btn = mode === "zip" ? $("gPdfZip") : mode === "combined" ? $("gPdfAll") : null;
   if (btn) { btn.disabled = true; btn.dataset.t = btn.textContent; btn.textContent = "Création…"; }
@@ -1311,7 +1332,7 @@ $("gExcel").onclick = async () => {
       c.grade != null ? { v: c.grade, s: c.grade < 4 ? "err" : "bold" } : "", STATUS_LABEL[c.state] || "", s.remark || ""];
   });
   const graded = rows.map(gradeCalc).filter(c => c.grade != null && c.state === "evalue");
-  const info = [[H("Notation Suivi Pix"), H("")], ["Évaluation", g.title], ["Date", new Date().toLocaleString("fr-CH")], ["Classe", gClass || "toutes"], ["", ""],
+  const info = [[H("Notation Suivi Pix"), H("")], ["Cours", g.title], ["Formation", g.footerLeft || ""], ["Enseignant", g.footerRight || ""], ["Date", new Date().toLocaleString("fr-CH")], ["Classe", gClass || "toutes"], ["", ""],
     ["Points maximum (note 6)", g.maxPoints], ["Formule", `points × 5 / ${g.maxPoints} + 1`], ["Arrondi", g.rounding === "half" ? "demi-point" : g.rounding === "tenth" ? "dixième" : "centième"],
     ["Note d'un travail non remis", g.nonRemisGrade === "" ? "pas de note" : g.nonRemisGrade], ...rulesLines().map(l => [l, ""]), ["", ""],
     ["Élèves", rows.length], ["Moyenne des notes", graded.length ? Math.round(graded.reduce((a, c) => a + c.grade, 0) / graded.length * 100) / 100 : ""]];

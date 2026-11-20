@@ -23,7 +23,7 @@ L'app fonctionne sur Mac Intel et Apple Silicon (macOS 11 ou plus récent) et n'
    - niveau **6** maximum dans une compétence (au-delà, la compétence compte 6 dans le total).
 4. Résultats : niveaux par compétence, total, pénalité et bilan par élève ; liste séparée des **inévaluables** (identifiants incorrects → travail non remis) et des comptes **à revérifier** (problème technique) ; **bilan et filtre par classe**, tri par classe ou date d'envoi ; **export** de chaque liste (Excel ou copie) ou de toutes les listes dans un classeur (un onglet par liste : Résultats, Conformes, Total insuffisant, Pénalités, Niveau 6 dépassé, Inévaluables, À revérifier, Infos).
 
-5. Onglet **Notation** : niveaux, total (11 points au maximum), pénalités automatiques et manuelles (retard, mauvais canal, mauvais identifiant, autre), note = points × 5 / 11 + 1 arrondie au demi-point ; ajout manuel d'élèves, revérification avec identifiants corrigés ; **fiches PDF** au style LogiExam (une page par élève, un PDF global ou un .zip) et **notes en Excel**.
+5. Onglet **Notation** : niveaux, total (11 points au maximum), pénalités automatiques et manuelles (retard, mauvais canal, mauvais identifiant, autre), note = points × 5 / 11 + 1 arrondie au demi-point ; ajout manuel d'élèves, revérification avec identifiants corrigés ; **fiches PDF** au style LogiExam (une page par élève : nom et classe en grand, cours, description des compétences travaillées, note, pied de page formation/enseignant ; un PDF global ou un .zip) et **notes en Excel**.
 
 Fermer l'onglet (ou cliquer sur *Quitter*) arrête l'app.
 

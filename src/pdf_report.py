@@ -78,13 +78,14 @@ def _color(rgb):
 
 
 class Doc:
-    def __init__(self, header_title, header_date):
+    def __init__(self, header_title, header_date, header_class="", footer_left="", footer_right=""):
         self.pages, self.content, self.y = [], "", 0
-        self.header_title, self.header_date = header_title, header_date
+        self.footer_left, self.footer_right = _plain(footer_left), _plain(footer_right)
+        self.header_title, self.header_date, self.header_class = header_title, header_date, _plain(header_class)
 
     # --- primitives
     def text(self, x, y, size, text, font="F1", rgb=(0, 0, 0)):
-        self.content += _color(rgb) + "BT /%s %d Tf %.2f %.2f Td (%s) Tj ET\n" % (font, size, x, y, _esc(text))
+        self.content += _color(rgb) + "BT /%s %g Tf %.2f %.2f Td (%s) Tj ET\n" % (font, size, x, y, _esc(text))
 
     def fill(self, x, y, w, h, rgb):
         self.content += _color(rgb) + "%.2f %.2f %.2f %.2f re f\n" % (x, y, w, h)
@@ -97,16 +98,35 @@ class Doc:
         self.content += _color(rgb) + p + " h f\n"
 
     # --- mise en page
+    def _footer(self):
+        # Pied de page : formation / branche a gauche, enseignant a droite
+        if not (self.footer_left or self.footer_right):
+            return
+        self.fill(42, 32, 511, 0.6, (210, 214, 205))
+        if self.footer_left:
+            self.text(42, 20, 8, self.footer_left, "F1", MUTED)
+        if self.footer_right:
+            self.text(553 - text_width(self.footer_right, 8, "F2"), 20, 8, self.footer_right, "F2", MUTED)
+
     def new_page(self):
         if self.content:
+            self._footer()
             self.pages.append(self.content)
         self.content, self.y = "", 748
         # Bandeau LogiExam : fond sombre, filet jaune, logo a gauche, titre et date a droite
         self.fill(0, 778, 595, 64, DARK)
         self.fill(0, 774, 595, 4, YELLOW)
         self._logo(30, 778)
-        self.text(553 - text_width(self.header_title, 15, "F2"), 808, 15, self.header_title, "F2", (255, 255, 255))
-        self.text(553 - text_width(self.header_date, 9), 792, 9, self.header_date, "F1", (201, 209, 217))
+        if self.header_class:
+            # Classe en grand (jaune) pour trier et distribuer les feuilles
+            cls = "Classe " + self.header_class
+            size = 22 if text_width(cls, 22, "F2") <= 300 else 16
+            self.text(553 - text_width(self.header_title, 10, "F2"), 824, 10, self.header_title, "F2", (201, 209, 217))
+            self.text(553 - text_width(cls, size, "F2"), 801, size, cls, "F2", YELLOW)
+            self.text(553 - text_width(self.header_date, 8), 787, 8, self.header_date, "F1", (201, 209, 217))
+        else:
+            self.text(553 - text_width(self.header_title, 15, "F2"), 808, 15, self.header_title, "F2", (255, 255, 255))
+            self.text(553 - text_width(self.header_date, 9), 792, 9, self.header_date, "F1", (201, 209, 217))
 
     def _logo(self, x, y0):
         # Cube vert avec coche jaune (comme le logo LogiExam) + « Suivi Pix »
@@ -123,6 +143,22 @@ class Doc:
         self.text(x + 48, y0 + 24, 22, "Suivi", "F2", (255, 255, 255))
         self.text(x + 48 + text_width("Suivi", 22, "F2") + 6, y0 + 24, 22, "Pix", "F2", YELLOW)
 
+    def student_banner(self, name):
+        """Nom et prenom de l'eleve en grand, sous le bandeau, avec un filet jaune a gauche."""
+        size = 22
+        lines = wrap(name, 495, size, "F2")
+        if len(lines) > 1:
+            size = 19
+            lines = wrap(name, 495, size, "F2")
+        lead = size + 4
+        height = 14 + len(lines) * lead
+        top = self.y + 4
+        self.fill(42, top - height - 2, 4, height + 2, YELLOW)
+        self.text(54, top - 9, 8, "ÉLÈVE", "F2", MUTED)
+        for i, line in enumerate(lines):
+            self.text(54, top - 14 - size + 4 - i * lead, size, line, "F2", DARK)
+        self.y = top - height - 10
+
     def ensure(self, h):
         if self.y - h < 54:
             self.new_page()
@@ -130,80 +166,80 @@ class Doc:
     def section(self, title, keep=0):
         lines = wrap(title, 500, 14, "F2")
         if self.y < 740:
-            self.y -= 4
+            self.y -= 8
         self.ensure(34 + (len(lines) - 1) * 18 + keep)
         for i, line in enumerate(lines):
             self.text(42, self.y - i * 18, 14, line, "F2", DARK)
         self.y -= (len(lines) - 1) * 18
         self.fill(42, self.y - 8, 60, 3, YELLOW)
         self.fill(102, self.y - 7, 451, 1, (210, 214, 205))
-        self.y -= 24
+        self.y -= 22
 
-    def info_grid(self, items, cols=3):
-        # Grille d'informations LogiExam, ici sur 3 colonnes pour tenir sur une page
-        colw = 495 / cols
-        rows = [items[i:i + cols] for i in range(0, len(items), cols)]
+    def info_grid(self, rows):
+        """Grille d'informations LogiExam ; chaque ligne a son nombre de colonnes."""
         heights = []
-        for pair in rows:
+        for row in rows:
+            colw = 495 / len(row)
             h = 0
-            for it in pair:
-                hl = len(it) > 2 and it[2] == "highlight"
-                n = len(wrap(it[1], colw - 24 if hl else colw - 14, 12 if hl else 9, "F2" if hl else "F1"))
-                h = max(h, 13 + n * (13 if hl else 11) + (12 if hl else 4))
+            for it in row:
+                big = len(it) > 2 and it[2] == "big"
+                n = len(wrap(it[1], colw - 14, 12 if big else 9, "F2" if big else "F1"))
+                h = max(h, 13 + n * (14 if big else 11) + 2)
             heights.append(h + 8)
-        height = 18 + sum(heights)
+        height = 16 + sum(heights)
         self.ensure(height + 10)
         top = self.y
         self.fill(42, top - height, 511, height, (248, 250, 252))
         self.rect(42, top - height, 511, height)
-        y_row = top - 22
-        for r, pair in enumerate(rows):
-            for col, it in enumerate(pair):
+        y_row = top - 20
+        for r, row in enumerate(rows):
+            colw = 495 / len(row)
+            for col, it in enumerate(row):
                 x, y = 58 + col * colw, y_row
-                hl = len(it) > 2 and it[2] == "highlight"
-                lines = wrap(it[1], colw - 24 if hl else colw - 14, 12 if hl else 9, "F2" if hl else "F1")
-                if hl:
-                    box = 13 + len(lines) * 13 + 10
-                    self.fill(x - 6, y - box + 10, colw - 10, box, (255, 255, 255))
-                    self.rect(x - 6, y - box + 10, colw - 10, box)
+                big = len(it) > 2 and it[2] == "big"
                 self.text(x, y, 8, it[0].upper(), "F2", MUTED)
-                for i, line in enumerate(lines):
-                    self.text(x, y - 13 - i * (13 if hl else 11), 12 if hl else 9, line, "F2" if hl else "F1", GREEN if hl else INK)
+                for k, line in enumerate(wrap(it[1], colw - 14, 12 if big else 9, "F2" if big else "F1")):
+                    self.text(x, y - 14 - k * (14 if big else 11), 12 if big else 9, line, "F2" if big else "F1", GREEN if big else INK)
             y_row -= heights[r]
-        self.y -= height + 14
+        self.y -= height + 12
 
     def score_box(self, items, grade_label, grade):
-        height = 118
+        height = 106
         self.ensure(height + 12)
         top = self.y
         self.fill(42, top - height, 511, height, (238, 240, 235))
         self.rect(42, top - height, 511, height)
         for row, (label, value) in enumerate(items[:4]):
-            y = top - 20 - row * 25
+            y = top - 18 - row * 23.5
             self.text(60, y, 8, label.upper(), "F2", (91, 102, 114))
             self.text(60, y - 12, 11, value, "F2", DARK)
-        bx, bw, by, bh = 330, 205, top - height + 14, height - 28
+        bx, bw, by, bh = 330, 205, top - height + 12, height - 24
         self.fill(bx, by, bw, bh, DARK)
         self.fill(bx, by + bh - 5, bw, 5, YELLOW)
         self.text(bx + 18, by + bh - 26, 9, grade_label.upper(), "F2", YELLOW)
-        size = 22 if len(grade) > 6 else 38
-        self.text(bx + 18, by + 16, size, grade, "F2", (255, 255, 255))
+        size = 22 if len(grade) > 6 else 36
+        self.text(bx + 18, by + 14, size, grade, "F2", (255, 255, 255))
         self.y -= height + 12
 
-    def card(self, number, title, right, detail, comment, right_rgb=GREEN):
+    def card(self, number, title, right, detail, comment, right_rgb=GREEN, desc=""):
         tl = wrap(title, 380, 11, "F2")
+        sl = wrap(desc, 455, 9) if desc else []
         dl = wrap(detail, 455, 10) if detail else []
-        cl = wrap(comment, 480, 10, "F3") if comment else []
+        cl = wrap(comment, 455, 9.5, "F3") if comment else []
         # positions des lignes (de haut en bas), puis hauteur exacte du cadre
         pos, y = [], -18
         for i, line in enumerate(tl):
             pos.append((82, y, 11, line, "F2", (17, 24, 39))); y -= 14
-        y -= 1
+        y += 1
+        for line in sl:
+            pos.append((82, y, 9, line, "F1", (51, 65, 85))); y -= 11
+        if sl:
+            y -= 3
         for line in dl:
-            pos.append((82, y, 10, line, "F1", BLUE)); y -= 13
+            pos.append((82, y, 10, line, "F1", BLUE)); y -= 12.5
         for line in cl:
-            pos.append((82, y, 10, line, "F3", SLATE)); y -= 13
-        height = -y - 2
+            pos.append((82, y, 9.5, line, "F3", SLATE)); y -= 12
+        height = -y + 1
         self.ensure(height + 8)
         top = self.y
         self.fill(42, top - height, 511, height, (255, 255, 255))
@@ -212,7 +248,7 @@ class Doc:
         self.text(535 - text_width(right, 11, "F2"), top - 18, 11, right, "F2", right_rgb)
         for x, yy, size, line, font, rgb in pos:
             self.text(x, top + yy, size, line, font, rgb)
-        self.y -= height + 8
+        self.y -= height + 6
 
     def note_box(self, title, paragraphs, red_first=False):
         lines = []
@@ -242,8 +278,8 @@ class Doc:
         for p in paragraphs:
             lines += wrap(p, 500, 8)
         height = 14 + len(lines) * 10
-        if self.y - height - 4 < 22:   # le rappel peut descendre dans la marge du bas
-            self.new_page()
+        if self.y - height - 4 < 38:   # pas la place au-dessus du pied de page : on l'omet
+            return
         self.y -= 4
         self.fill(42, self.y + 6, 511, 0.6, (210, 214, 205))
         self.text(42, self.y - 6, 8, title.upper(), "F2", MUTED)
@@ -270,6 +306,7 @@ class Doc:
 
     def finish(self):
         if self.content:
+            self._footer()
             self.pages.append(self.content)
             self.content = ""
         return self.pages
@@ -312,22 +349,27 @@ def fmt_pts(v):
 
 def student_pages(st, meta):
     """Une fiche eleve sur une page. Tous les calculs viennent de l'interface."""
-    doc = Doc("Résultats Pix", meta.get("generatedAt") or time.strftime("%d.%m.%Y %H:%M"))
+    doc = Doc("Résultats Pix", meta.get("generatedAt") or time.strftime("%d.%m.%Y %H:%M"), st.get("classe") or "",
+              meta.get("footerLeft", ""), meta.get("footerRight", ""))
     doc.new_page()
     max_pts = meta.get("maxPoints", 11)
-    doc.section("Informations")
-    doc.info_grid([("Élève", st.get("name") or "", "highlight"),
-                   ("Évaluation", meta.get("title") or "Compétences numériques Pix"),
-                   ("Classe", st.get("classe") or "-"),
-                   ("Compte Pix", st.get("login") or "-"),
-                   ("Accès transmis le", st.get("date") or "-"),
-                   ("Niveaux relevés le", st.get("checkedAt") or "-")])
+    doc.student_banner(st.get("name") or "")
+    doc.info_grid([[("Cours", meta.get("title") or "Compétences élémentaires en informatique : PIX", "big")],
+                   [("Classe", st.get("classe") or "-"), ("Compte Pix", st.get("login") or "-"),
+                    ("Accès transmis le", st.get("date") or "-"), ("Niveaux relevés le", st.get("checkedAt") or "-")]])
 
     if st.get("status") == "non_remis":
         doc.alert_box("Travail non remis - " + (("note : " + st["grade"]) if st.get("grade") else "sans note"),
                       st.get("nonRemisText") or "Les identifiants Pix transmis sont incorrects : le travail est inévaluable et n'est pas considéré comme remis.")
 
-    doc.section("Synthèse de la note", keep=130)
+    comps = st.get("competences") or []
+    if comps:
+        doc.section(meta.get("compsTitle") or "Compétences travaillées en autonomie sur Pix", keep=60)
+        for i, c in enumerate(comps, 1):
+            doc.card(i, "%s %s" % (c.get("index", ""), c.get("name", "")), c.get("right", ""), c.get("detail", ""), c.get("comment", ""),
+                     RED if c.get("alert") else GREEN, c.get("desc", ""))
+
+    doc.section("Synthèse de la note", keep=110)
     doc.score_box([
         ("Total des niveaux retenus", st.get("totalLabel") or fmt_pts(st.get("total", 0))),
         ("Points pris en compte", "%s / %s" % (fmt_pts(st.get("counted", 0)), fmt_pts(max_pts))),
@@ -335,14 +377,7 @@ def student_pages(st, meta):
         ("Total des points", "%s / %s" % (fmt_pts(st.get("finalPoints", 0)), fmt_pts(max_pts))),
     ], "Note finale", st.get("grade") or "-")
     pens = st.get("penalties") or []
-    doc.note_box("Pénalités", ["- %s : -%s pt" % (p.get("label", ""), fmt_pts(p.get("points", 0))) for p in pens] if pens else ["Aucune pénalité."])
-
-    comps = st.get("competences") or []
-    if comps:
-        doc.section("Détail par compétence", keep=50)
-        for i, c in enumerate(comps, 1):
-            doc.card(i, "%s %s" % (c.get("index", ""), c.get("name", "")), c.get("right", ""), c.get("detail", ""), c.get("comment", ""),
-                     RED if c.get("alert") else GREEN)
+    doc.note_box("Pénalités", [" · ".join("%s : -%s pt" % (p.get("label", ""), fmt_pts(p.get("points", 0))) for p in pens)] if pens else ["Aucune pénalité."])
 
     if (st.get("remark") or "").strip():
         doc.note_box("Commentaire de l'enseignant", (st.get("remark") or "").splitlines())
